@@ -32,7 +32,7 @@
 
 1. پوشه این مخزن را دانلود کرده یا کلون کنید:
    ```bash
-   git clone https://github.com/entheogenous/x-smart-cleaner.git
+   git clone https://github.com/mjavadz/x-smart-cleaner.git
    ```
    *(یا فایل ZIP را دانلود و Extract کنید).*
 
