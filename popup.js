@@ -1,7 +1,7 @@
-// popup.js - X Smart Cleaner Popup Controller
+// popup.js - X Smart Cleaner Popup Controller v1.1.0
 
 document.addEventListener("DOMContentLoaded", () => {
-  // Elements
+  // DOM Elements
   const statusPill = document.getElementById("status-pill");
   const userHandleEl = document.getElementById("user-handle");
   const statFollowing = document.getElementById("stat-following");
@@ -11,9 +11,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const thresholdSelect = document.getElementById("threshold-select");
   const delaySelect = document.getElementById("delay-select");
   const batchSelect = document.getElementById("batch-select");
+  const deepScanToggle = document.getElementById("deep-scan-toggle");
   const whitelistInput = document.getElementById("whitelist-input");
   
   const btnScan = document.getElementById("btn-scan");
+  const btnExport = document.getElementById("btn-export");
   const btnUnfollow = document.getElementById("btn-unfollow");
   const btnStop = document.getElementById("btn-stop");
   const btnClearLog = document.getElementById("btn-clear-log");
@@ -24,15 +26,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const progressFill = document.getElementById("progress-fill");
   
   const consoleLogs = document.getElementById("console-logs");
-  
-  const tabAuto = document.getElementById("tab-auto");
-  const tabDom = document.getElementById("tab-dom");
 
   let isRunning = false;
   let shouldStop = false;
   let activeTabId = null;
   let currentUser = null;
   let scannedCandidates = [];
+  let allScannedItems = [];
 
   // Logger helper
   function log(msg, type = "normal") {
@@ -49,6 +49,29 @@ document.addEventListener("DOMContentLoaded", () => {
     log("لاگ‌ها پاک‌سازی شدند.", "text-muted");
   });
 
+  // Load saved settings from Chrome storage
+  if (chrome.storage && chrome.storage.local) {
+    chrome.storage.local.get(["customWhitelist", "threshold", "delayMode", "batchSize"], (res) => {
+      if (res.customWhitelist) whitelistInput.value = res.customWhitelist;
+      if (res.threshold) thresholdSelect.value = res.threshold;
+      if (res.delayMode) delaySelect.value = res.delayMode;
+      if (res.batchSize) batchSelect.value = res.batchSize;
+    });
+
+    whitelistInput.addEventListener("input", () => {
+      chrome.storage.local.set({ customWhitelist: whitelistInput.value });
+    });
+    thresholdSelect.addEventListener("change", () => {
+      chrome.storage.local.set({ threshold: thresholdSelect.value });
+    });
+    delaySelect.addEventListener("change", () => {
+      chrome.storage.local.set({ delayMode: delaySelect.value });
+    });
+    batchSelect.addEventListener("change", () => {
+      chrome.storage.local.set({ batchSize: batchSelect.value });
+    });
+  }
+
   // Check connection to active tab
   async function initConnection() {
     try {
@@ -56,7 +79,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!tab || (!tab.url.includes("x.com") && !tab.url.includes("twitter.com"))) {
         statusPill.className = "status-pill offline";
         userHandleEl.innerText = "لطفاً وارد x.com شوید";
-        log("خطا: لطفاً مرورگر را روی تب x.com یا twitter.com قرار دهید.", "warn");
+        log("خطا: تب فعال مرورگر صفحه x.com نیست.", "warn");
         btnScan.disabled = true;
         return;
       }
@@ -65,14 +88,14 @@ document.addEventListener("DOMContentLoaded", () => {
       chrome.tabs.sendMessage(activeTabId, { action: "PING" }, (res) => {
         if (chrome.runtime.lastError || !res || !res.ok) {
           statusPill.className = "status-pill offline";
-          userHandleEl.innerText = "عدم پاسخ پیج (صفحه را رفرش کنید)";
+          userHandleEl.innerText = "عدم پاسخ پیج (صفحه را Refresh کنید)";
           log("کانتنت اسکریپت هنوز لود نشده؛ یک‌بار صفحه x.com را Refresh کنید.", "warn");
           btnScan.disabled = true;
         } else {
           statusPill.className = "status-pill online";
-          currentUser = res.user || "کاربر متصل";
+          currentUser = res.user || "کاربر لاگین";
           userHandleEl.innerText = currentUser.startsWith("@") ? currentUser : `@${currentUser}`;
-          log(`✓ متصل به اکانت ${userHandleEl.innerText}`, "success");
+          log(`✓ ارتباط امن با مرورگر برقرار است (${userHandleEl.innerText})`, "success");
           btnScan.disabled = false;
         }
       });
@@ -86,58 +109,50 @@ document.addEventListener("DOMContentLoaded", () => {
   // Helper delays
   function getDelay() {
     const mode = delaySelect.value;
-    if (mode === "fast") return Math.random() * 2500 + 2500; // 2.5 - 5.0s
-    if (mode === "relaxed") return Math.random() * 5000 + 7000; // 7.0 - 12.0s
+    if (mode === "fast") return Math.random() * 2000 + 2500; // 2.5 - 4.5s
+    if (mode === "stealth") return Math.random() * 7000 + 8000; // 8.0 - 15.0s (Ultra safe)
     return Math.random() * 4500 + 4000; // 4.0 - 8.5s (Safe default)
   }
 
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-  // Mode switching
-  tabAuto.addEventListener("click", () => {
-    tabAuto.classList.add("active");
-    tabDom.classList.remove("active");
-    log("حالت اسکن خودکار فعال شد.", "text-muted");
-  });
-
-  tabDom.addEventListener("click", () => {
-    tabDom.classList.add("active");
-    tabAuto.classList.remove("active");
-    log("حالت اسکن صفحه Following (DOM) فعال شد. مطمئن شوید در صفحه Following اکانت خود هستید.", "text-muted");
-  });
-
   // 1. Scan logic
   btnScan.addEventListener("click", async () => {
     if (!activeTabId) return;
     
-    log("🔍 در حال اسکن دنبال‌شوندگان...", "normal");
+    const isDeep = deepScanToggle.checked;
+    log(`🔍 شروع اسکن ${isDeep ? 'عمیق و خودکار' : 'صفحه فعلی'}...`, "normal");
+    
     btnScan.disabled = true;
+    btnUnfollow.disabled = true;
+    btnExport.disabled = true;
     progressContainer.classList.remove("hidden");
-    progressFill.style.width = "20%";
-    progressPercent.innerText = "20%";
-    progressText.innerText = "در حال تحلیل...";
+    progressFill.style.width = "15%";
+    progressPercent.innerText = "15%";
+    progressText.innerText = isDeep ? "در حال پیمایش و واکشی اکانت‌ها..." : "در حال تحلیل...";
 
-    // Read custom whitelist
     const customWhitelist = whitelistInput.value
       .toLowerCase()
       .split(",")
       .map(s => s.trim().replace(/^@/, ''))
       .filter(Boolean);
 
-    const threshold = parseInt(thresholdSelect.value, 10);
+    const maxBatch = parseInt(batchSelect.value, 10);
+    const targetScanCount = maxBatch > 500 ? 500 : Math.max(maxBatch * 2, 100);
 
-    chrome.tabs.sendMessage(activeTabId, { action: "SCAN_DOM_PAGE" }, async (res) => {
+    chrome.tabs.sendMessage(activeTabId, { action: "SCAN_DOM_PAGE", deepScan: isDeep, maxTarget: targetScanCount }, async (res) => {
       progressFill.style.width = "100%";
       progressPercent.innerText = "100%";
       btnScan.disabled = false;
 
       if (!res || !res.ok) {
-        log("اسکن DOM انجام نشد یا صفحه‌ای غیر از Following باز است.", "error");
-        log("نکته: به آدرس x.com/YOUR_USERNAME/following بروید و دکمه اسکن را بزنید.", "warn");
+        log("اسکن ناموفق بود یا در صفحه‌ای غیر از Following هستید.", "error");
+        log("راهنما: به آدرس x.com/YOUR_USERNAME/following بروید و دکمه اسکن را بزنید.", "warn");
         return;
       }
 
       const items = res.items || [];
+      allScannedItems = items;
       statFollowing.innerText = items.length;
 
       let nonFollowers = [];
@@ -161,30 +176,59 @@ document.addEventListener("DOMContentLoaded", () => {
       scannedCandidates = nonFollowers;
 
       log(`✓ اسکن پایان یافت: ${items.length} اکانت بررسی شد.`, "success");
-      log(`تعداد بدون فالوبک: ${nonFollowers.length} | محافظت‌شده: ${protectedCount}`, "normal");
+      log(`شناسایی بدون فالوبک: ${nonFollowers.length} نفر | محافظت‌شده: ${protectedCount} نفر`, "normal");
 
       if (nonFollowers.length > 0) {
         btnUnfollow.disabled = false;
+        btnExport.disabled = false;
+        log("💡 پیشنهاد: قبل از شروع آنفالو، می‌توانید با دکمه «پشتیبان CSV» یک بکاپ ذخیره کنید.", "text-muted");
       } else {
-        log("هیچ اکانت واجد شرایطی برای آنفالو یافت نشد.", "warn");
+        log("هیچ اکانت بدون بکی برای آنفالو یافت نشد.", "warn");
       }
     });
   });
 
-  // 2. Unfollow logic
+  // 2. Export CSV Backup
+  btnExport.addEventListener("click", () => {
+    if (scannedCandidates.length === 0) return;
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    let csvContent = "\uFEFFUsername,Display Name,Follows You,Profile URL,Scan Date\n";
+
+    scannedCandidates.forEach(item => {
+      const name = (item.displayName || item.username).replace(/"/g, '""');
+      csvContent += `"${item.username}","${name}","No","https://x.com/${item.username}","${dateStr}"\n`;
+    });
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `x_non_followers_backup_${dateStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    log(`📥 فایل پشتیبان با موفقیت دانلود شد (${scannedCandidates.length} اکانت).`, "success");
+  });
+
+  // 3. Unfollow logic
   btnUnfollow.addEventListener("click", async () => {
     if (scannedCandidates.length === 0) return;
 
     const maxBatch = parseInt(batchSelect.value, 10);
     const targetList = scannedCandidates.slice(0, maxBatch);
 
-    log(`🚀 شروع آنفالوی ایمن برای ${targetList.length} اکانت...`, "success");
+    log(`🚀 شروع آنفالوی خودکار و ایمن برای ${targetList.length} اکانت...`, "success");
     isRunning = true;
     shouldStop = false;
 
     btnScan.disabled = true;
+    btnExport.disabled = true;
     btnUnfollow.classList.add("hidden");
     btnStop.classList.remove("hidden");
+    btnStop.disabled = false;
     progressContainer.classList.remove("hidden");
 
     let completed = 0;
@@ -192,7 +236,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     for (let i = 0; i < targetList.length; i++) {
       if (shouldStop) {
-        log("⏹ عملیات توسط کاربر متوقف شد.", "warn");
+        log("⏹ عملیات توسط کاربر با موفقیت متوقف شد.", "warn");
         break;
       }
 
@@ -202,29 +246,51 @@ document.addEventListener("DOMContentLoaded", () => {
       progressPercent.innerText = `${percent}%`;
       progressText.innerText = `[${i + 1}/${targetList.length}] @${user.username}`;
 
-      log(`[${i + 1}/${targetList.length}] در حال بررسی و آنفالو: @${user.username}...`, "normal");
+      log(`[${i + 1}/${targetList.length}] اقدام به آنفالو: @${user.username}...`, "normal");
 
-      // In browser DOM, click the unfollow button or trigger API
-      const delay = getDelay();
-      log(`صبر به مدت ${(delay / 1000).toFixed(1)} ثانیه (رفتار انسانی)...`, "text-muted");
-      await sleep(delay);
+      // Execute via content script
+      const res = await new Promise(resolve => {
+        chrome.tabs.sendMessage(activeTabId, { action: "UNFOLLOW_USER", username: user.username }, resolve);
+      });
 
-      completed++;
-      log(`✓ با موفقیت آنفالو شد: @${user.username}`, "success");
+      if (res && res.ok) {
+        completed++;
+        log(`✓ آنفالو شد (@${user.username}) [${res.method}]`, "success");
+      } else {
+        errors++;
+        log(`✗ خطا در آنفالوی @${user.username}: ${(res && res.error) || 'نامشخص'}`, "error");
+      }
+
+      // Human randomized delay between unfollows
+      if (i < targetList.length - 1 && !shouldStop) {
+        const delay = getDelay();
+        log(`صبر به مدت ${(delay / 1000).toFixed(1)} ثانیه جهت رعایت سقف ایمنی...`, "text-muted");
+        await sleep(delay);
+      }
     }
 
     isRunning = false;
     btnScan.disabled = false;
+    btnExport.disabled = false;
     btnUnfollow.classList.remove("hidden");
     btnStop.classList.add("hidden");
 
-    log(`🎉 پایان پارت! تعداد ${completed} اکانت با موفقیت آنفالو شدند (خطا: ${errors}).`, "success");
-    statNonFollowers.innerText = Math.max(0, scannedCandidates.length - completed);
+    log(`🎉 پایان پارت! تعداد ${completed} اکانت آنفالو شدند (خطاها: ${errors}).`, "success");
+    
+    // Update local remaining candidates
+    scannedCandidates = scannedCandidates.slice(completed);
+    statNonFollowers.innerText = scannedCandidates.length;
+    if (scannedCandidates.length === 0) {
+      btnUnfollow.disabled = true;
+    }
   });
 
   btnStop.addEventListener("click", () => {
     shouldStop = true;
     btnStop.disabled = true;
-    log("در حال توقف امن فرآیند...", "warn");
+    log("درخواست توقف ارسال شد؛ پس از اتمام مورد جاری عملیات متوقف می‌شود...", "warn");
+    if (activeTabId) {
+      chrome.tabs.sendMessage(activeTabId, { action: "STOP_DEEP_SCAN" });
+    }
   });
 });

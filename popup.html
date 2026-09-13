@@ -2,7 +2,7 @@
 <html lang="fa" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <title>X Smart Cleaner</title>
+  <title>X Smart Cleaner v1.1.0</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
@@ -17,8 +17,11 @@
           </svg>
         </div>
         <div>
-          <h1 class="app-title">X Smart Cleaner</h1>
-          <p class="app-sub">پالایشگر هوشمند و ایمن توییتر</p>
+          <div class="title-with-badge">
+            <h1 class="app-title">X Smart Cleaner</h1>
+            <span class="version-badge">v1.1.0</span>
+          </div>
+          <p class="app-sub">پالایشگر هوشمند، ایمن و محلی توییتر</p>
         </div>
       </div>
       <div id="status-pill" class="status-pill offline">
@@ -27,18 +30,12 @@
       </div>
     </header>
 
-    <!-- Navigation / Mode Tabs -->
-    <div class="tabs">
-      <button id="tab-auto" class="tab-btn active">⚡️ اسکن و آنفالوی API</button>
-      <button id="tab-dom" class="tab-btn">👀 اسکن چشمی صفحه (DOM)</button>
-    </div>
-
     <!-- Bento Stats -->
     <div class="stats-grid">
       <div class="stat-card">
-        <span class="stat-label">فالویینگ‌ها</span>
+        <span class="stat-label">اسکن‌شده</span>
         <span id="stat-following" class="stat-val">—</span>
-        <span class="stat-hint">کل دنبال‌شوندگان</span>
+        <span class="stat-hint">کل بررسی‌شده</span>
       </div>
       <div class="stat-card">
         <span class="stat-label">بدون فالوبک</span>
@@ -48,13 +45,13 @@
       <div class="stat-card">
         <span class="stat-label">محافظت‌شده</span>
         <span id="stat-protected" class="stat-val val-gold">—</span>
-        <span class="stat-hint">Whitelist & رسانه‌ها</span>
+        <span class="stat-hint">Whitelist / متقابل</span>
       </div>
     </div>
 
     <!-- Settings Section -->
     <section class="settings-card">
-      <div class="section-title">⚙️ تنظیمات فیلتر و ایمنی</div>
+      <div class="section-title">⚙️ تنظیمات فیلتر، سرعت و ایمنی</div>
       
       <div class="setting-row">
         <label for="threshold-select">فیلتر اکانت‌های مشهور:</label>
@@ -62,16 +59,16 @@
           <option value="20000" selected>حفظ اکانت‌های بالای ۲۰,۰۰۰ فالور (پیشنهادی)</option>
           <option value="10000">حفظ اکانت‌های بالای ۱۰,۰۰۰ فالور</option>
           <option value="50000">حفظ اکانت‌های بالای ۵۰,۰۰۰ فالور</option>
-          <option value="0">بدون فیلتر (آنفالوی همه بدون استثنا)</option>
+          <option value="0">بدون فیلتر (تمام موارد بدون بک)</option>
         </select>
       </div>
 
       <div class="setting-row">
-        <label for="delay-select">سرعت و تاخیر رفتار انسانی:</label>
+        <label for="delay-select">پروفایل سرعت و رفتار انسانی:</label>
         <select id="delay-select" class="select-input">
-          <option value="safe" selected>ایمن (۴ تا ۸.۵ ثانیه تاخیر - پیشنهادی)</option>
-          <option value="relaxed">محتاطانه (۷ تا ۱۲ ثانیه تاخیر)</option>
-          <option value="fast">سریع (۲.۵ تا ۵ ثانیه تاخیر)</option>
+          <option value="safe" selected>ایمن (۴ تا ۸.۵ ثانیه تاخیر - استاندارد)</option>
+          <option value="stealth">فوق‌محتاط / نامحسوس (۸ تا ۱۵ ثانیه)</option>
+          <option value="fast">سریع (۲.۵ تا ۴.۵ ثانیه)</option>
         </select>
       </div>
 
@@ -81,12 +78,22 @@
           <option value="50">۵۰ اکانت</option>
           <option value="100" selected>۱۰۰ اکانت (سقف ایمن روزانه)</option>
           <option value="200">۲۰۰ اکانت</option>
-          <option value="999999">تمام اکانت‌های شناسایی شده</option>
+          <option value="999999">تمام اکانت‌های شناسایی‌شده</option>
         </select>
       </div>
 
+      <div class="setting-row toggle-row">
+        <label for="deep-scan-toggle" class="checkbox-label">
+          <input type="checkbox" id="deep-scan-toggle" checked>
+          <span>اسکرول خودکار و عمیق صفحه (Deep Auto-Scroll)</span>
+        </label>
+      </div>
+
       <div class="setting-row custom-whitelist">
-        <label for="whitelist-input">لیست سفید دلخواه (با کاما جدا کنید):</label>
+        <div class="label-with-hint">
+          <label for="whitelist-input">لیست سفید دائمی (با کاما جدا کنید):</label>
+          <span class="hint-tag">ذخیره خودکار</span>
+        </div>
         <input type="text" id="whitelist-input" class="text-input" placeholder="elonmusk, naval, vitalikbuterin...">
       </div>
     </section>
@@ -106,11 +113,15 @@
     <div class="actions-group">
       <button id="btn-scan" class="btn btn-primary">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-        <span>۱. اسکن و تحلیل لیست</span>
+        <span>۱. اسکن لیست</span>
+      </button>
+      <button id="btn-export" class="btn btn-outline" disabled title="دانلود فایل اکسل/CSV از اکانت‌های بدون بک">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span>پشتیبان CSV</span>
       </button>
       <button id="btn-unfollow" class="btn btn-danger" disabled>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="17" y1="8" x2="23" y2="14"/><line x1="23" y1="8" x2="17" y2="14"/></svg>
-        <span>۲. شروع آنفالوی ایمن</span>
+        <span>۲. شروع آنفالو</span>
       </button>
       <button id="btn-stop" class="btn btn-secondary hidden">
         <span>توقف</span>
@@ -120,11 +131,11 @@
     <!-- Live Console Terminal -->
     <div class="console-card">
       <div class="console-head">
-        <span>📋 لاگ لحظه‌ای فرآیند</span>
+        <span>📋 لاگ زنده فرآیند</span>
         <button id="btn-clear-log" class="link-btn">پاک‌سازی</button>
       </div>
       <div id="console-logs" class="console-body">
-        <div class="log-line text-muted">منتظر شروع اسکن... اکانت شما باید در x.com لاگین باشد.</div>
+        <div class="log-line text-muted">منتظر شروع اسکن... صفحه Following در x.com را باز کنید.</div>
       </div>
     </div>
 
@@ -132,7 +143,7 @@
     <footer class="footer">
       <div class="privacy-tag">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3fb950" stroke-width="2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        <span>۱۰۰٪ محلی در مرورگر — بدون ارسال پسورد یا کوکی به هیچ سروری</span>
+        <span>۱۰۰٪ محلی در کلاینت مرورگر — بدون ارسال کوکی یا پسورد به سرور</span>
       </div>
     </footer>
   </div>
