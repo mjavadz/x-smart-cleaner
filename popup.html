@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="fa" dir="rtl">
+<html lang="fa" dir="rtl" id="root-html">
 <head>
   <meta charset="UTF-8">
-  <title>X Smart Cleaner v1.1.0</title>
+  <title>X Smart Cleaner Pro v2.0.0</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
@@ -11,139 +11,217 @@
     <header class="header">
       <div class="logo-group">
         <div class="logo-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
             <path d="m9 12 2 2 4-4"/>
           </svg>
         </div>
         <div>
           <div class="title-with-badge">
-            <h1 class="app-title">X Smart Cleaner</h1>
-            <span class="version-badge">v1.1.0</span>
+            <h1 class="app-title">X Smart Cleaner <span class="pro-text">PRO</span></h1>
+            <span class="version-badge">v2.0.0</span>
           </div>
-          <p class="app-sub">پالایشگر هوشمند، ایمن و محلی توییتر</p>
+          <p class="app-sub" data-i18n="tagline">پالایشگر هوشمند، ایمن و محلی توییتر</p>
         </div>
       </div>
-      <div id="status-pill" class="status-pill offline">
-        <span class="status-dot"></span>
-        <span id="user-handle">بررسی اتصال...</span>
+      <div class="header-actions">
+        <button id="btn-lang" class="lang-btn" title="تغییر زبان / Switch Language">
+          <span class="lang-icon">🌐</span>
+          <span id="lang-label">EN</span>
+        </button>
+        <div id="status-pill" class="status-pill offline">
+          <span class="status-dot"></span>
+          <span id="user-handle" data-i18n="checking">بررسی اتصال...</span>
+        </div>
       </div>
     </header>
 
-    <!-- Bento Stats -->
-    <div class="stats-grid">
-      <div class="stat-card">
-        <span class="stat-label">اسکن‌شده</span>
-        <span id="stat-following" class="stat-val">—</span>
-        <span class="stat-hint">کل بررسی‌شده</span>
-      </div>
-      <div class="stat-card">
-        <span class="stat-label">بدون فالوبک</span>
-        <span id="stat-non-followers" class="stat-val val-danger">—</span>
-        <span class="stat-hint">واجد شرایط آنفالو</span>
-      </div>
-      <div class="stat-card">
-        <span class="stat-label">محافظت‌شده</span>
-        <span id="stat-protected" class="stat-val val-gold">—</span>
-        <span class="stat-hint">Whitelist / متقابل</span>
-      </div>
-    </div>
+    <!-- Top Navigation Tabs -->
+    <nav class="nav-tabs">
+      <button id="nav-dash" class="nav-tab active" data-tab="tab-dash">
+        <span class="tab-icon">⚡️</span>
+        <span data-i18n="tab_dashboard">داشبورد</span>
+      </button>
+      <button id="nav-list" class="nav-tab" data-tab="tab-list">
+        <span class="tab-icon">📋</span>
+        <span data-i18n="tab_candidates">لیست انتخابی</span>
+        <span id="badge-list-count" class="tab-counter hidden">0</span>
+      </button>
+      <button id="nav-history" class="nav-tab" data-tab="tab-history">
+        <span class="tab-icon">📜</span>
+        <span data-i18n="tab_history">تاریخچه</span>
+        <span id="badge-history-count" class="tab-counter hidden">0</span>
+      </button>
+      <button id="nav-rules" class="nav-tab" data-tab="tab-rules">
+        <span class="tab-icon">🛡️</span>
+        <span data-i18n="tab_rules">قوانین ایمنی</span>
+      </button>
+    </nav>
 
-    <!-- Settings Section -->
-    <section class="settings-card">
-      <div class="section-title">⚙️ تنظیمات فیلتر، سرعت و ایمنی</div>
-      
-      <div class="setting-row">
-        <label for="threshold-select">فیلتر اکانت‌های مشهور:</label>
-        <select id="threshold-select" class="select-input">
-          <option value="20000" selected>حفظ اکانت‌های بالای ۲۰,۰۰۰ فالور (پیشنهادی)</option>
-          <option value="10000">حفظ اکانت‌های بالای ۱۰,۰۰۰ فالور</option>
-          <option value="50000">حفظ اکانت‌های بالای ۵۰,۰۰۰ فالور</option>
-          <option value="0">بدون فیلتر (تمام موارد بدون بک)</option>
-        </select>
-      </div>
-
-      <div class="setting-row">
-        <label for="delay-select">پروفایل سرعت و رفتار انسانی:</label>
-        <select id="delay-select" class="select-input">
-          <option value="safe" selected>ایمن (۴ تا ۸.۵ ثانیه تاخیر - استاندارد)</option>
-          <option value="stealth">فوق‌محتاط / نامحسوس (۸ تا ۱۵ ثانیه)</option>
-          <option value="fast">سریع (۲.۵ تا ۴.۵ ثانیه)</option>
-        </select>
-      </div>
-
-      <div class="setting-row">
-        <label for="batch-select">سقف تعداد در این پارت:</label>
-        <select id="batch-select" class="select-input">
-          <option value="50">۵۰ اکانت</option>
-          <option value="100" selected>۱۰۰ اکانت (سقف ایمن روزانه)</option>
-          <option value="200">۲۰۰ اکانت</option>
-          <option value="999999">تمام اکانت‌های شناسایی‌شده</option>
-        </select>
+    <!-- TAB 1: DASHBOARD -->
+    <div id="tab-dash" class="tab-content active">
+      <!-- Bento Stats Grid -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <span class="stat-label" data-i18n="stat_scanned">بررسی‌شده</span>
+          <span id="stat-following" class="stat-val">—</span>
+          <span class="stat-hint" data-i18n="stat_scanned_hint">کل اسکن</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label" data-i18n="stat_nonfollowers">بدون فالوبک</span>
+          <span id="stat-non-followers" class="stat-val val-danger">—</span>
+          <span class="stat-hint" data-i18n="stat_nonfollowers_hint">واجد شرایط</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label" data-i18n="stat_protected">محافظت‌شده</span>
+          <span id="stat-protected" class="stat-val val-gold">—</span>
+          <span class="stat-hint" data-i18n="stat_protected_hint">متقابل / وایت‌لیست</span>
+        </div>
       </div>
 
+      <!-- Quick Control Row -->
+      <div class="quick-controls">
+        <div class="control-box">
+          <label for="batch-select" data-i18n="label_batch">سقف پارت:</label>
+          <select id="batch-select" class="select-input">
+            <option value="50">۵۰ اکانت</option>
+            <option value="100" selected>۱۰۰ اکانت (ایمن)</option>
+            <option value="200">۲۰۰ اکانت</option>
+            <option value="999999" data-i18n="opt_all">تمام موارد</option>
+          </select>
+        </div>
+        <div class="control-box">
+          <label for="delay-select" data-i18n="label_speed">سرعت و تاخیر:</label>
+          <select id="delay-select" class="select-input">
+            <option value="safe" selected data-i18n="speed_safe">ایمن (۴-۸.۵s)</option>
+            <option value="stealth" data-i18n="speed_stealth">نامحسوس (۸-۱۵s)</option>
+            <option value="fast" data-i18n="speed_fast">سریع (۲.۵-۴.۵s)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Auto-scroll checkbox -->
       <div class="setting-row toggle-row">
         <label for="deep-scan-toggle" class="checkbox-label">
           <input type="checkbox" id="deep-scan-toggle" checked>
-          <span>اسکرول خودکار و عمیق صفحه (Deep Auto-Scroll)</span>
+          <span data-i18n="deep_scan_label">اسکرول عمیق و خودکار صفحه (Deep Auto-Scroll)</span>
         </label>
       </div>
 
-      <div class="setting-row custom-whitelist">
-        <div class="label-with-hint">
-          <label for="whitelist-input">لیست سفید دائمی (با کاما جدا کنید):</label>
-          <span class="hint-tag">ذخیره خودکار</span>
+      <!-- Progress Bar -->
+      <div id="progress-container" class="progress-container hidden">
+        <div class="progress-info">
+          <span id="progress-text" data-i18n="processing">در حال پردازش...</span>
+          <span id="progress-percent">0%</span>
         </div>
-        <input type="text" id="whitelist-input" class="text-input" placeholder="elonmusk, naval, vitalikbuterin...">
+        <div class="progress-bar-bg">
+          <div id="progress-fill" class="progress-bar-fill"></div>
+        </div>
       </div>
-    </section>
 
-    <!-- Progress Bar -->
-    <div id="progress-container" class="progress-container hidden">
-      <div class="progress-info">
-        <span id="progress-text">در حال پردازش...</span>
-        <span id="progress-percent">0%</span>
+      <!-- Actions Group -->
+      <div class="actions-group">
+        <button id="btn-scan" class="btn btn-primary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <span data-i18n="btn_scan">۱. اسکن لیست</span>
+        </button>
+        <button id="btn-export" class="btn btn-outline" disabled title="دانلود فایل اکسل/CSV">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span data-i18n="btn_backup">پشتیبان CSV</span>
+        </button>
+        <button id="btn-unfollow" class="btn btn-danger" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="17" y1="8" x2="23" y2="14"/><line x1="23" y1="8" x2="17" y2="14"/></svg>
+          <span data-i18n="btn_unfollow">۲. شروع آنفالو</span>
+        </button>
+        <button id="btn-stop" class="btn btn-secondary hidden">
+          <span data-i18n="btn_stop">توقف</span>
+        </button>
       </div>
-      <div class="progress-bar-bg">
-        <div id="progress-fill" class="progress-bar-fill"></div>
+
+      <!-- Live Console Terminal -->
+      <div class="console-card">
+        <div class="console-head">
+          <span data-i18n="console_title">📋 لاگ زنده فرآیند</span>
+          <button id="btn-clear-log" class="link-btn" data-i18n="clear">پاک‌سازی</button>
+        </div>
+        <div id="console-logs" class="console-body">
+          <div class="log-line text-muted" data-i18n="ready_hint">منتظر شروع اسکن... تب Following در x.com را باز کنید.</div>
+        </div>
       </div>
     </div>
 
-    <!-- Action Buttons -->
-    <div class="actions-group">
-      <button id="btn-scan" class="btn btn-primary">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-        <span>۱. اسکن لیست</span>
-      </button>
-      <button id="btn-export" class="btn btn-outline" disabled title="دانلود فایل اکسل/CSV از اکانت‌های بدون بک">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        <span>پشتیبان CSV</span>
-      </button>
-      <button id="btn-unfollow" class="btn btn-danger" disabled>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="17" y1="8" x2="23" y2="14"/><line x1="23" y1="8" x2="17" y2="14"/></svg>
-        <span>۲. شروع آنفالو</span>
-      </button>
-      <button id="btn-stop" class="btn btn-secondary hidden">
-        <span>توقف</span>
-      </button>
+    <!-- TAB 2: CANDIDATES CHECKLIST -->
+    <div id="tab-list" class="tab-content">
+      <div class="list-toolbar">
+        <input type="text" id="candidate-search" class="text-input" placeholder="جستجوی کاربر یا نام...">
+        <div class="selection-actions">
+          <button id="btn-select-all" class="mini-btn" data-i18n="select_all">انتخاب همه</button>
+          <button id="btn-deselect-all" class="mini-btn" data-i18n="deselect_all">لغو همه</button>
+          <span id="selected-counter" class="counter-label">۰ انتخاب‌شده</span>
+        </div>
+      </div>
+      <div id="candidates-container" class="items-list-container">
+        <div class="empty-placeholder" data-i18n="no_candidates">ابتدا در تب داشبورد دکمه «اسکن لیست» را بزنید.</div>
+      </div>
     </div>
 
-    <!-- Live Console Terminal -->
-    <div class="console-card">
-      <div class="console-head">
-        <span>📋 لاگ زنده فرآیند</span>
-        <button id="btn-clear-log" class="link-btn">پاک‌سازی</button>
+    <!-- TAB 3: HISTORY & UNDO -->
+    <div id="tab-history" class="tab-content">
+      <div class="list-toolbar">
+        <span class="history-summary" data-i18n="history_title">سابقه آنفالوهای انجام‌شده با این افزونه</span>
+        <button id="btn-clear-history" class="mini-btn text-danger" data-i18n="clear_history">پاک‌سازی تاریخچه</button>
       </div>
-      <div id="console-logs" class="console-body">
-        <div class="log-line text-muted">منتظر شروع اسکن... صفحه Following در x.com را باز کنید.</div>
+      <div id="history-container" class="items-list-container">
+        <div class="empty-placeholder" data-i18n="no_history">هنوز هیچ اکانتی آنفالو نشده است.</div>
       </div>
+    </div>
+
+    <!-- TAB 4: ADVANCED RULES & FILTERS -->
+    <div id="tab-rules" class="tab-content">
+      <section class="settings-card">
+        <div class="section-title" data-i18n="rules_title">🛡️ قوانین هوشمند محافظت از اکانت‌ها</div>
+        
+        <div class="setting-row">
+          <label for="threshold-select" data-i18n="rule_fame">فیلتر شهرت (Follower Count):</label>
+          <select id="threshold-select" class="select-input">
+            <option value="20000" selected data-i18n="fame_20k">حفظ اکانت‌های بالای ۲۰,۰۰۰ فالور (پیشنهادی)</option>
+            <option value="10000" data-i18n="fame_10k">حفظ اکانت‌های بالای ۱۰,۰۰۰ فالور</option>
+            <option value="50000" data-i18n="fame_50k">حفظ اکانت‌های بالای ۵۰,۰۰۰ فالور</option>
+            <option value="0" data-i18n="fame_0">بدون فیلتر شهرت</option>
+          </select>
+        </div>
+
+        <div class="setting-row toggle-row">
+          <label for="protect-verified-toggle" class="checkbox-label">
+            <input type="checkbox" id="protect-verified-toggle" checked>
+            <span data-i18n="rule_verified">محافظت خودکار از اکانت‌های تیک آبی / رسمی</span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="label-with-hint">
+            <label for="bio-keywords-input" data-i18n="rule_bio">کلمات کلیدی محافظت بایو (با کاما جدا کنید):</label>
+            <span class="hint-tag" data-i18n="auto_save">ذخیره خودکار</span>
+          </div>
+          <input type="text" id="bio-keywords-input" class="text-input" placeholder="dev, crypto, friend, family...">
+          <span class="sub-hint" data-i18n="rule_bio_hint">اگر بایوی اکانت شامل این کلمات باشد، هرگز آنفالو نمی‌شود.</span>
+        </div>
+
+        <div class="setting-row custom-whitelist">
+          <div class="label-with-hint">
+            <label for="whitelist-input" data-i18n="rule_whitelist">لیست سفید دائمی (آیدی‌ها را با کاما جدا کنید):</label>
+            <span class="hint-tag" data-i18n="auto_save">ذخیره خودکار</span>
+          </div>
+          <input type="text" id="whitelist-input" class="text-input" placeholder="elonmusk, naval, vitalikbuterin...">
+        </div>
+      </section>
     </div>
 
     <!-- Footer Privacy Badge -->
     <footer class="footer">
       <div class="privacy-tag">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3fb950" stroke-width="2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        <span>۱۰۰٪ محلی در کلاینت مرورگر — بدون ارسال کوکی یا پسورد به سرور</span>
+        <span data-i18n="footer_privacy">۱۰۰٪ محلی در مرورگر — بدون ارسال کوکی یا پسورد به سرور</span>
       </div>
     </footer>
   </div>

@@ -1,72 +1,94 @@
-# 🛡️ X Smart Cleaner (پالایشگر هوشمند و ایمن توییتر)
+# 🛡️ X Smart Cleaner Pro (پالایشگر هوشمند و ایمن توییتر)
 
-[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/mjavadz/x-smart-cleaner)
+[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/mjavadz/x-smart-cleaner)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Privacy: Zero-Knowledge](https://img.shields.io/badge/Privacy-100%25%20Local-brightgreen.svg)](#-امنیت-و-حریم-خصوصی)
+[![Privacy: Zero-Knowledge](https://img.shields.io/badge/Privacy-100%25%20Local-brightgreen.svg)](#-privacy--security-امنیت)
+[![i18n: Bilingual](https://img.shields.io/badge/i18n-English%20%7C%20Persian-orange.svg)](#-bilingual-support)
 
-یک اکستنشن متن‌باز، سبک و کاملاً محلی برای مرورگرهای مبتنی بر کرومیوم (Chrome, Brave, Edge, Arc) جهت **شناسایی و آنفالوی خودکار اکانت‌هایی که به شما فالوبک نداده‌اند**، با رعایت کامل پروتکل‌های ایمنی، فیلتر هوشمند افراد سرشناس و تاخیر تصادفی رفتار انسانی.
+A clean, open-source, and 100% local Chromium extension (Chrome, Brave, Edge, Arc) to **safely identify and unfollow non-followers on X (Twitter)** with smart protection filters, interactive checklist, 1-click undo history, and anti-spam randomized human delays.
 
----
-
-## 🌟 چه چیز جدیدی در نسخه ۱.۱.۰ (v1.1.0) اضافه شد؟
-- 📥 **خروجی فایل پشتیبان (CSV Export):** امکان دانلود یک فایل پشتیبان با فرمت اکسل/CSV قبل از شروع آنفالو، حاوی آیدی و لینک تمامی اکانت‌های بدون بک.
-- 📜 **اسکرول عمیق خودکار (Deep Auto-Scroll):** پیمایش خودکار و مداوم صفحه Following برای استخراج صدها کاربر حتی در لیست‌های طولانی و بدون نیاز به اسکرول دستی.
-- 💾 **ذخیره خودکار تنظیمات و لیست سفید:** آیدی‌های محافظت‌شده (Custom Whitelist) و اولویت‌های شما به طور دائمی در مرورگر ذخیره می‌مانند.
-- ⏱ **پروفایل‌های هوشمند سرعت (Speed & Safety Profiles):**
-  - **حالت فوق‌محتاط (Stealth):** فواصل ۸ تا ۱۵ ثانیه برای اکانت‌های حساس یا تازه تاسیس.
-  - **حالت ایمن (Safe Standard):** فواصل ۴ تا ۸.۵ ثانیه (پیشنهادی و تست‌شده برای بیش از ۱,۳۰۰ آنفالو بدون شادوبن).
-  - **حالت سریع (Fast):** فواصل ۲.۵ تا ۴.۵ ثانیه.
-- 🔄 **سازوکار هیبریدی (API + DOM Fallback):** تلاش برای لغو سریع از طریق اندپوینت داخلی توییتر، و در صورت نیاز کلیک خودکار روی تایید مرورگر بدون بروز خطا.
+افزونه‌ای مدرن، متن‌باز و کاملاً محلی برای مرورگرهای کرومیوم جهت **شناسایی و آنفالوی ایمن اکانت‌های بدون بک در توییتر** با چک‌لیست تعاملی، تاریخچه و بازگردانی ۱-کلیکه، محافظت از تیک آبی، کلمات کلیدی بایو و فواصل تصادفی رفتار انسانی.
 
 ---
 
-## 🔒 امنیت و حریم خصوصی (Zero-Knowledge)
-اکثر ابزارها و وب‌سایت‌های آنفالویاب موجود:
-1. از شما **نام‌کاربری، رمز عبور یا کلید دسترسی** می‌خواهند که حساب را در معرض سرقت و هک قرار می‌دهد.
-2. به دلیل ارسال درخواست‌های سروری همزمان، به سرعت باعث قفل شدن (Lock/Suspend) یا لیمیت شدن اکانت می‌شوند.
-
-**X Smart Cleaner** کل فرآیند را **صددرصد داخل مرورگر شما و روی کلاینت خودتان** با سشن فعال اجرا می‌کند؛ هیچ داده‌ای، کوکی‌ای یا پسوردی به هیچ سرور خارجی ارسال نمی‌شود و کدها کاملاً متن‌باز و قابل بازرسی هستند.
+## 🚀 What's New in v2.0.0 (نسخه ۲.۰.۰)
+- 🌐 **Full Bilingual Support (EN / FA):** One-click toggle between English and Persian (RTL/LTR dynamic adaptation).
+- 📋 **Interactive Candidate Checklist:** Inspect all non-followers with avatar, name, handle, and verification badge. Search, filter, and manually check/uncheck users before unfollowing.
+- 📜 **History & 1-Click Undo (Re-Follow):** Dedicated history tab tracking every unfollowed account with a 1-click "Re-Follow" button in case of mistakes.
+- 🛡️ **Verified & Bio Protection:**
+  - Automatically shield verified accounts (Blue checkmark & Organizations).
+  - Bio keyword protection (protect any user with keywords like `dev`, `crypto`, `music`, etc.).
+- 📥 **CSV Backup Export:** Instant Excel/CSV backup export of non-followers with full details.
+- 📜 **Deep Auto-Scroll:** Hands-free background continuous DOM harvesting for large following lists.
+- ⏱ **Adaptive Speed Profiles:**
+  - **Stealth Mode:** 8.0 – 15.0s randomized human delay.
+  - **Safe Standard:** 4.0 – 8.5s randomized delay (battle-tested across 1,300+ unfollows with 0 shadowbans).
+  - **Fast Mode:** 2.5 – 4.5s.
+- 🔄 **Zero-Knowledge Architecture:** 100% client-side execution in your browser session; no tokens, cookies, or passwords ever leave your machine.
 
 ---
 
-## 🚀 ویژگی‌های کلیدی
-- 🛡️ **فیلتر سلبریتی‌ها و رسانه‌ها:** حفظ خودکار اکانت‌های بالای ۱۰,۰۰۰ یا ۲۰,۰۰۰ فالور (کانال‌های خبری، اکانت‌های رسمی و...).
-- 📝 **لیست سفید دستی (Custom Whitelist):** وارد کردن آیدی دوستان و همکاران تا هرگز آنفالو نشوند.
-- ⏱ **تاخیر انسانی ضداسپم (Anti-Spam Random Delays):** رفتاری دقیقاً مشابه کلیک‌های انسانی با فواصل زمانی تصادفی.
-- 📊 **معماری رابط بنتو (Bento Grid):** نمایش زنده تعداد دنبال‌شوندگان، بدون‌بک‌ها و محافظت‌شده‌ها همراه با نوار پیشرفت و لاگ زنده کنسول.
+## 📸 Overview / پیش‌نمایش
+
+| Tab | Feature | ویژگی |
+|---|---|---|
+| ⚡️ **Dashboard** | Bento stats, quick speed controls, deep scan toggle, live terminal console | آمار بنتو، انتخاب سرعت، اسکرول عمیق، لاگ زنده |
+| 📋 **Candidates** | Searchable checklist, avatars, bulk select/deselect | چک‌لیست انتخابی، جستجوی زنده، آواتارها |
+| 📜 **History** | Unfollow logs with timestamp & 1-click Re-Follow | ثبت سابقه با تاریخ و دکمه بازگردانی (فالو مجدد) |
+| 🛡️ **Safety Rules** | Follower threshold, Verified shield, Bio keyword filter, Whitelist | فیلتر فالور، محافظت تیک آبی، کلمات کلیدی بایو |
 
 ---
 
-## 💻 راهنمای نصب سریع (کمتر از ۱ دقیقه)
+## 💻 Quick Installation (نصب در کمتر از ۱ دقیقه)
 
-### روش اول: استفاده از فایل فشرده آماده (پیشنهادی)
-1. آخرین نسخه فشرده را از بخش **[Releases](https://github.com/mjavadz/x-smart-cleaner/releases)** دانلود کرده و از حالت زیپ خارج (Unzip) کنید.
-2. در مرورگر خود (کروم، بریو یا اج) آدرس زیر را باز کنید:
+### Method 1: Pre-packaged ZIP (Recommended)
+1. Download the latest **[x-smart-cleaner-v2.0.0.zip](https://github.com/mjavadz/x-smart-cleaner/releases/tag/v2.0.0)** from Releases.
+2. Unzip the downloaded file.
+3. Open your browser and navigate to:
    ```text
    chrome://extensions/
    ```
-3. گزینه **Developer mode (حالت توسعه‌دهنده)** را از گوشه بالا فعال کنید.
-4. دکمه **Load unpacked** را بزنید و پوشه اکستنشن را انتخاب کنید.
+4. Enable **Developer mode** in the top-right corner.
+5. Click **Load unpacked** and select the unzipped directory.
+6. The extension is installed and ready in your toolbar!
 
-### روش دوم: کلون مخزن
+### روش اول: دانلود فایل فشرده آماده
+۱. فایل زیپ نسخه ۲ را از بخش **[Releases](https://github.com/mjavadz/x-smart-cleaner/releases/tag/v2.0.0)** دانلود و اکسترکت کنید.  
+۲. در مرورگر به آدرس `chrome://extensions/` بروید.  
+۳. گزینه **Developer mode** در بالا سمت راست را فعال کنید.  
+۴. روی دکمه **Load unpacked** بزنید و پوشه افزونه را انتخاب کنید.  
+
+---
+
+### Method 2: Git Clone
 ```bash
 git clone https://github.com/mjavadz/x-smart-cleaner.git
 ```
-سپس از مسیر بالا پوشه را در تب افزونه‌ها بارگذاری نمایید.
+Then load the folder unpacked in `chrome://extensions/`.
 
 ---
 
-## 📖 نحوه استفاده
-1. به صفحه دنبال‌شوندگان اکانت خود بروید:  
+## 📖 How to Use (راهنمای استفاده)
+1. Open your Twitter/X Following page in a browser tab:  
    `https://x.com/YOUR_USERNAME/following`
-2. روی آیکون افزونه در نوار ابزار کلیک کنید (شناسه شما با نشانگر سبز نمایش داده می‌شود).
-3. سقف تعداد پارت (مثلاً ۱۰۰ اکانت) و سرعت را تعیین کنید.
-4. روی **«۱. اسکن لیست»** بزنید تا سیستم کاربران را شناسایی کند.
-5. *(اختیاری)* با دکمه **«پشتیبان CSV»** یک فایل اکسل از لیست بدون‌بک‌ها دانلود کنید.
-6. روی **«۲. شروع آنفالو»** بزنید و فرآیند را تماشا کنید.
+2. Click the extension icon in your toolbar (status indicator turns green).
+3. Set your batch size and speed profile in Dashboard.
+4. Click **"1. Scan Following"**.
+5. *(Optional)* Switch to the **Candidates** tab to uncheck any specific accounts or use **"Backup CSV"** to save a spreadsheet.
+6. Click **"2. Start Unfollow"** and watch the live progress.
 
 ---
 
-## 📜 لایسنس
-این پروژه تحت لایسنس **MIT** منتشر شده است.
+## 🔒 Privacy & Security (امنیت و حریم خصوصی)
+Unlike typical unfollow tools:
+* ❌ Never asks for username, password, or login credentials.
+* ❌ Never uses external backend servers.
+* ❌ Never makes simultaneous burst requests that trigger Twitter's anti-bot locks.
+* ✅ Runs purely inside your own browser window using your existing session.
+* ✅ Fully auditable open-source code.
+
+---
+
+## 📜 License
+Released under the open-source **[MIT License](LICENSE)**.  
 Made with ☕ by [@entheogenous](https://x.com/entheogenous).
