@@ -1,4 +1,4 @@
-// popup.js - X Smart Cleaner Pro Controller v2.0.0
+// popup.js - X Smart Cleaner Pro Controller v2.1.0
 
 const I18N = {
   fa: {
@@ -22,11 +22,11 @@ const I18N = {
     speed_stealth: "نامحسوس (۸-۱۵s)",
     speed_fast: "سریع (۲.۵-۴.۵s)",
     opt_all: "تمام موارد",
-    deep_scan_label: "اسکرول عمیق و خودکار صفحه (Deep Auto-Scroll)",
+    deep_scan_label: "اسکرول عمیق و واکشی دقیق تعداد فالوورها (GraphQL)",
     processing: "در حال پردازش...",
     btn_scan: "۱. اسکن لیست",
     btn_backup: "پشتیبان CSV",
-    btn_unfollow: "۲. شروع آنفالو",
+    btn_unfollow: "۲. شروع در پس‌زمینه",
     btn_stop: "توقف",
     console_title: "📋 لاگ زنده فرآیند",
     clear: "پاک‌سازی",
@@ -39,7 +39,7 @@ const I18N = {
     clear_history: "پاک‌سازی تاریخچه",
     no_history: "هنوز هیچ اکانتی آنفالو نشده است.",
     rules_title: "🛡️ قوانین هوشمند محافظت از اکانت‌ها",
-    rule_fame: "فیلتر شهرت (Follower Count):",
+    rule_fame: "فیلتر شهرت (بر مبنای فالوور واقعی GraphQL):",
     fame_20k: "حفظ اکانت‌های بالای ۲۰,۰۰۰ فالور (پیشنهادی)",
     fame_10k: "حفظ اکانت‌های بالای ۱۰,۰۰۰ فالور",
     fame_50k: "حفظ اکانت‌های بالای ۵۰,۰۰۰ فالور",
@@ -51,7 +51,8 @@ const I18N = {
     auto_save: "ذخیره خودکار",
     footer_privacy: "۱۰۰٪ محلی در مرورگر — بدون ارسال کوکی یا پسورد به سرور",
     refollow_btn: "فالو مجدد",
-    refollowed_btn: "✓ فالو شد"
+    refollowed_btn: "✓ فالو شد",
+    bg_running: "عملیات در پس‌زمینه در حال اجراست (می‌توانید این پنجره را ببندید)"
   },
   en: {
     tagline: "Smart, secure & local X/Twitter cleaner",
@@ -74,11 +75,11 @@ const I18N = {
     speed_stealth: "Stealth (8-15s)",
     speed_fast: "Fast (2.5-4.5s)",
     opt_all: "All items",
-    deep_scan_label: "Deep continuous auto-scroll",
+    deep_scan_label: "Deep scroll & real follower fetching (GraphQL)",
     processing: "Processing...",
     btn_scan: "1. Scan Following",
     btn_backup: "Backup CSV",
-    btn_unfollow: "2. Start Unfollow",
+    btn_unfollow: "2. Start in Background",
     btn_stop: "Stop",
     console_title: "📋 Live Execution Log",
     clear: "Clear",
@@ -91,7 +92,7 @@ const I18N = {
     clear_history: "Clear History",
     no_history: "No unfollow history recorded yet.",
     rules_title: "🛡️ Smart Account Protection Rules",
-    rule_fame: "Fame Filter (Follower Count):",
+    rule_fame: "Fame Filter (Real GraphQL follower count):",
     fame_20k: "Keep accounts with > 20,000 followers (Recommended)",
     fame_10k: "Keep accounts with > 10,000 followers",
     fame_50k: "Keep accounts with > 50,000 followers",
@@ -103,15 +104,14 @@ const I18N = {
     auto_save: "Auto Saved",
     footer_privacy: "100% Client-Side — No passwords or cookies sent to any server",
     refollow_btn: "Re-Follow",
-    refollowed_btn: "✓ Followed"
+    refollowed_btn: "✓ Followed",
+    bg_running: "Task running in background (safe to close this popup)"
   }
 };
 
 document.addEventListener("DOMContentLoaded", () => {
   let currentLang = "fa";
   let activeTabId = null;
-  let isRunning = false;
-  let shouldStop = false;
   let scannedCandidates = [];
   let selectedUsernames = new Set();
   let unfollowHistory = [];
@@ -122,6 +122,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const langLabel = document.getElementById("lang-label");
   const statusPill = document.getElementById("status-pill");
   const userHandleEl = document.getElementById("user-handle");
+  const bgTaskBanner = document.getElementById("bg-task-banner");
 
   const statFollowing = document.getElementById("stat-following");
   const statNonFollowers = document.getElementById("stat-non-followers");
@@ -211,32 +212,100 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // Load saved settings
-  if (chrome.storage && chrome.storage.local) {
-    chrome.storage.local.get([
-      "appLang", "customWhitelist", "bioKeywords", "threshold", "delayMode", "batchSize", "protectVerified", "unfollowHistory"
-    ], (res) => {
-      if (res.appLang) applyLanguage(res.appLang);
-      if (res.customWhitelist) whitelistInput.value = res.customWhitelist;
-      if (res.bioKeywords) bioKeywordsInput.value = res.bioKeywords;
-      if (res.threshold) thresholdSelect.value = res.threshold;
-      if (res.delayMode) delaySelect.value = res.delayMode;
-      if (res.batchSize) batchSelect.value = res.batchSize;
-      if (res.protectVerified !== undefined) protectVerifiedToggle.checked = res.protectVerified;
-      if (res.unfollowHistory) {
-        unfollowHistory = res.unfollowHistory;
-        renderHistory();
-      }
-    });
+  // Load saved settings & sync with background task
+  function initSettingsAndTaskState() {
+    if (chrome.storage && chrome.storage.local) {
+      chrome.storage.local.get([
+        "appLang", "customWhitelist", "bioKeywords", "threshold", "delayMode", "batchSize", "protectVerified", "unfollowHistory", "activeUnfollowTask"
+      ], (res) => {
+        if (res.appLang) applyLanguage(res.appLang);
+        if (res.customWhitelist) whitelistInput.value = res.customWhitelist;
+        if (res.bioKeywords) bioKeywordsInput.value = res.bioKeywords;
+        if (res.threshold) thresholdSelect.value = res.threshold;
+        if (res.delayMode) delaySelect.value = res.delayMode;
+        if (res.batchSize) batchSelect.value = res.batchSize;
+        if (res.protectVerified !== undefined) protectVerifiedToggle.checked = res.protectVerified;
+        if (res.unfollowHistory) {
+          unfollowHistory = res.unfollowHistory;
+          renderHistory();
+        }
 
-    // Auto-save listeners
-    whitelistInput.addEventListener("input", () => chrome.storage.local.set({ customWhitelist: whitelistInput.value }));
-    bioKeywordsInput.addEventListener("input", () => chrome.storage.local.set({ bioKeywords: bioKeywordsInput.value }));
-    thresholdSelect.addEventListener("change", () => chrome.storage.local.set({ threshold: thresholdSelect.value }));
-    delaySelect.addEventListener("change", () => chrome.storage.local.set({ delayMode: delaySelect.value }));
-    batchSelect.addEventListener("change", () => chrome.storage.local.set({ batchSize: batchSelect.value }));
-    protectVerifiedToggle.addEventListener("change", () => chrome.storage.local.set({ protectVerified: protectVerifiedToggle.checked }));
+        // Check if background task is actively running
+        if (res.activeUnfollowTask && res.activeUnfollowTask.isRunning) {
+          syncWithRunningTask(res.activeUnfollowTask);
+        }
+      });
+
+      // Auto-save listeners
+      whitelistInput.addEventListener("input", () => chrome.storage.local.set({ customWhitelist: whitelistInput.value }));
+      bioKeywordsInput.addEventListener("input", () => chrome.storage.local.set({ bioKeywords: bioKeywordsInput.value }));
+      thresholdSelect.addEventListener("change", () => chrome.storage.local.set({ threshold: thresholdSelect.value }));
+      delaySelect.addEventListener("change", () => chrome.storage.local.set({ delayMode: delaySelect.value }));
+      batchSelect.addEventListener("change", () => chrome.storage.local.set({ batchSize: batchSelect.value }));
+      protectVerifiedToggle.addEventListener("change", () => chrome.storage.local.set({ protectVerified: protectVerifiedToggle.checked }));
+    }
   }
+
+  initSettingsAndTaskState();
+
+  // Sync UI with background task state
+  function syncWithRunningTask(task) {
+    if (!task) return;
+
+    if (task.isRunning) {
+      bgTaskBanner.classList.remove("hidden");
+      btnScan.disabled = true;
+      btnExport.disabled = true;
+      btnUnfollow.classList.add("hidden");
+      btnStop.classList.remove("hidden");
+      btnStop.disabled = false;
+
+      progressContainer.classList.remove("hidden");
+      progressFill.style.width = `${task.currentPercent}%`;
+      progressPercent.innerText = `${task.currentPercent}%`;
+      progressText.innerText = `[${task.currentIndex + 1}/${task.targetList.length}] @${task.currentUsername}`;
+
+      // Sync recent logs
+      if (task.logs && task.logs.length > 0) {
+        consoleLogs.innerHTML = "";
+        task.logs.slice(-15).forEach(l => {
+          const line = document.createElement("div");
+          line.className = `log-line ${l.type}`;
+          line.innerText = `[${l.time}] ${l.text}`;
+          consoleLogs.appendChild(line);
+        });
+        consoleLogs.scrollTop = consoleLogs.scrollHeight;
+      }
+    } else {
+      bgTaskBanner.classList.add("hidden");
+      btnScan.disabled = false;
+      btnExport.disabled = scannedCandidates.length === 0;
+      btnUnfollow.classList.remove("hidden");
+      btnStop.classList.add("hidden");
+    }
+  }
+
+  // Listen for messages from background service worker
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.action === "TASK_PROGRESS" && msg.state) {
+      syncWithRunningTask(msg.state);
+    } else if (msg.action === "TASK_COMPLETED" && msg.state) {
+      syncWithRunningTask(msg.state);
+      log(`🎉 Background task finished! ${msg.state.completed} unfollowed.`, "success");
+      chrome.storage.local.get("unfollowHistory", (res) => {
+        if (res.unfollowHistory) {
+          unfollowHistory = res.unfollowHistory;
+          renderHistory();
+        }
+      });
+    } else if (msg.action === "TASK_STOPPED" && msg.state) {
+      syncWithRunningTask(msg.state);
+      log("⏹ Background task stopped.", "warn");
+    } else if (msg.action === "TASK_RATE_LIMITED") {
+      syncWithRunningTask({ isRunning: false });
+      log("🚨 Twitter Rate Limit (429) hit! Cooldown triggered to protect account.", "error");
+    }
+  });
 
   // Connection check
   async function initConnection() {
@@ -268,15 +337,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   initConnection();
-
-  // Delays
-  function getDelay() {
-    const mode = delaySelect.value;
-    if (mode === "fast") return Math.random() * 2000 + 2500;
-    if (mode === "stealth") return Math.random() * 7000 + 8000;
-    return Math.random() * 4500 + 4000;
-  }
-  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
   // Render Checklist
   function renderCandidates(filterText = "") {
@@ -341,6 +401,14 @@ document.addEventListener("DOMContentLoaded", () => {
         v.className = "verified-icon";
         v.innerText = "✓";
         top.appendChild(v);
+      }
+
+      // Followers count badge
+      if (item.formattedFollowers && item.formattedFollowers !== "—") {
+        const fb = document.createElement("span");
+        fb.className = "followers-badge";
+        fb.innerText = `👥 ${item.formattedFollowers}`;
+        top.appendChild(fb);
       }
 
       const handle = document.createElement("span");
@@ -466,7 +534,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!activeTabId) return;
 
     const isDeep = deepScanToggle.checked;
-    log(currentLang === "fa" ? `🔍 شروع اسکن ${isDeep ? 'عمیق' : 'صفحه'}...` : `🔍 Starting ${isDeep ? 'deep' : 'page'} scan...`, "normal");
+    log(currentLang === "fa" ? `🔍 شروع اسکن ${isDeep ? 'عمیق و دریافت فالوورها (GraphQL)' : 'صفحه'}...` : `🔍 Starting scan...`, "normal");
 
     btnScan.disabled = true;
     btnUnfollow.disabled = true;
@@ -479,6 +547,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const customWhitelist = whitelistInput.value.toLowerCase().split(",").map(s => s.trim().replace(/^@/, '')).filter(Boolean);
     const bioKeywords = bioKeywordsInput.value.toLowerCase().split(",").map(s => s.trim()).filter(Boolean);
     const protectVerified = protectVerifiedToggle.checked;
+    const threshold = parseInt(thresholdSelect.value, 10);
     const maxBatch = parseInt(batchSelect.value, 10);
     const targetScanCount = maxBatch > 500 ? 500 : Math.max(maxBatch * 2, 100);
 
@@ -504,8 +573,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const isCustomProtected = customWhitelist.includes(u);
         const hasProtectedBio = bioKeywords.some(kw => bio.includes(kw));
         const isVerifiedProtected = protectVerified && item.isVerified;
+        const isFameProtected = threshold > 0 && item.followersCount !== null && item.followersCount >= threshold;
 
-        if (item.followsYou || isCustomProtected || hasProtectedBio || isVerifiedProtected) {
+        if (item.followsYou || isCustomProtected || hasProtectedBio || isVerifiedProtected || isFameProtected) {
           protectedCount++;
         } else {
           nonFollowers.push(item);
@@ -523,8 +593,8 @@ document.addEventListener("DOMContentLoaded", () => {
       renderCandidates();
 
       log(currentLang === "fa" 
-        ? `✓ اسکن پایان یافت: ${items.length} اکانت (${nonFollowers.length} بدون‌بک)` 
-        : `✓ Scan complete: ${items.length} scanned (${nonFollowers.length} non-followers)`, "success");
+        ? `✓ اسکن پایان یافت: ${items.length} اکانت (${nonFollowers.length} بدون‌بک، ${protectedCount} محافظت‌شده)` 
+        : `✓ Scan complete: ${items.length} scanned (${nonFollowers.length} non-followers, ${protectedCount} protected)`, "success");
 
       if (nonFollowers.length > 0) {
         btnUnfollow.disabled = false;
@@ -537,112 +607,60 @@ document.addEventListener("DOMContentLoaded", () => {
   btnExport.addEventListener("click", () => {
     if (scannedCandidates.length === 0) return;
     const dateStr = new Date().toISOString().slice(0, 10);
-    let csv = "\uFEFFUsername,Display Name,Follows You,Verified,Bio,Scan Date\n";
+    let csv = "\uFEFFUsername,Display Name,Followers Count,Follows You,Verified,Bio,Scan Date\n";
     scannedCandidates.forEach(item => {
       const name = (item.displayName || "").replace(/"/g, '""');
       const bio = (item.bio || "").replace(/"/g, '""');
-      csv += `"${item.username}","${name}","No","${item.isVerified ? 'Yes' : 'No'}","${bio}","${dateStr}"\n`;
+      csv += `"${item.username}","${name}",${item.followersCount || 0},"No","${item.isVerified ? 'Yes' : 'No'}","${bio}","${dateStr}"\n`;
     });
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `x_non_followers_v2_${dateStr}.csv`;
+    a.download = `x_non_followers_v2.1_${dateStr}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     log(`CSV Backup exported (${scannedCandidates.length} accounts).`, "success");
   });
 
-  // 3. Unfollow logic
-  btnUnfollow.addEventListener("click", async () => {
+  // 3. Unfollow logic via Background Service Worker
+  btnUnfollow.addEventListener("click", () => {
     const targetList = scannedCandidates.filter(item => selectedUsernames.has(item.username.toLowerCase()));
     if (targetList.length === 0) {
-      log(currentLang === "fa" ? "هیچ اکانتی تیک نخورده است." : "No accounts selected in Candidates tab.", "warn");
+      log(currentLang === "fa" ? "هیچ اکانتی انتخاب نشده است." : "No accounts selected in Candidates tab.", "warn");
       return;
     }
 
     const maxBatch = parseInt(batchSelect.value, 10);
     const runBatch = targetList.slice(0, maxBatch);
 
-    log(`🚀 Starting safe unfollow batch for ${runBatch.length} accounts...`, "success");
-    isRunning = true;
-    shouldStop = false;
+    log(currentLang === "fa" 
+      ? `🚀 ارسال ${runBatch.length} اکانت به موتور پس‌زمینه...` 
+      : `🚀 Dispatching ${runBatch.length} accounts to background engine...`, "success");
 
-    btnScan.disabled = true;
-    btnExport.disabled = true;
-    btnUnfollow.classList.add("hidden");
-    btnStop.classList.remove("hidden");
-    btnStop.disabled = false;
-    progressContainer.classList.remove("hidden");
-
-    let completed = 0;
-    let errors = 0;
-
-    for (let i = 0; i < runBatch.length; i++) {
-      if (shouldStop) {
-        log("⏹ Stopped by user.", "warn");
-        break;
-      }
-
-      const user = runBatch[i];
-      const pct = Math.round(((i + 1) / runBatch.length) * 100);
-      progressFill.style.width = `${pct}%`;
-      progressPercent.innerText = `${pct}%`;
-      progressText.innerText = `[${i + 1}/${runBatch.length}] @${user.username}`;
-
-      log(`[${i + 1}/${runBatch.length}] Unfollowing @${user.username}...`, "normal");
-
-      const res = await new Promise(resolve => {
-        chrome.tabs.sendMessage(activeTabId, { action: "UNFOLLOW_USER", username: user.username }, resolve);
-      });
-
+    chrome.runtime.sendMessage({
+      action: "START_BACKGROUND_UNFOLLOW",
+      targetList: runBatch,
+      delayMode: delaySelect.value,
+      tabId: activeTabId
+    }, (res) => {
       if (res && res.ok) {
-        completed++;
-        log(`✓ Unfollowed @${user.username} [${res.method}]`, "success");
-
-        // Record in history
-        unfollowHistory.push({
-          username: user.username,
-          displayName: user.displayName,
-          date: new Date().toLocaleString()
-        });
-        if (chrome.storage && chrome.storage.local) {
-          chrome.storage.local.set({ unfollowHistory });
-        }
-
-        selectedUsernames.delete(user.username.toLowerCase());
-      } else {
-        errors++;
-        log(`✗ Failed @${user.username}: ${(res && res.error) || 'Unknown'}`, "error");
+        syncWithRunningTask(res.state);
+        log(currentLang === "fa" 
+          ? "✓ موتور پس‌زمینه فعال شد؛ می‌توانید این پنجره را ببندید." 
+          : "✓ Background engine active; you may close this popup safely.", "success");
       }
-
-      if (i < runBatch.length - 1 && !shouldStop) {
-        const delay = getDelay();
-        log(`Wait ${(delay / 1000).toFixed(1)}s (human delay)...`, "text-muted");
-        await sleep(delay);
-      }
-    }
-
-    isRunning = false;
-    btnScan.disabled = false;
-    btnExport.disabled = false;
-    btnUnfollow.classList.remove("hidden");
-    btnStop.classList.add("hidden");
-
-    // Remove unfollowed from candidates
-    scannedCandidates = scannedCandidates.filter(c => selectedUsernames.has(c.username.toLowerCase()));
-    statNonFollowers.innerText = scannedCandidates.length;
-
-    renderCandidates();
-    renderHistory();
-
-    log(`🎉 Batch finished! Unfollowed: ${completed}, Errors: ${errors}`, "success");
+    });
   });
 
+  // Stop background task
   btnStop.addEventListener("click", () => {
-    shouldStop = true;
     btnStop.disabled = true;
-    log("Stopping safely...", "warn");
-    if (activeTabId) chrome.tabs.sendMessage(activeTabId, { action: "STOP_DEEP_SCAN" });
+    log(currentLang === "fa" ? "ارسال دستور توقف به موتور پس‌زمینه..." : "Sending stop request to background...", "warn");
+    chrome.runtime.sendMessage({ action: "STOP_BACKGROUND_UNFOLLOW" }, () => {
+      btnStop.classList.add("hidden");
+      btnUnfollow.classList.remove("hidden");
+      bgTaskBanner.classList.add("hidden");
+    });
   });
 });

@@ -1,12 +1,148 @@
-// content.js - X Smart Cleaner Pro Content Script v2.0.0
+// content.js - X Smart Cleaner Pro Content Script v2.1.0
 
 const BEARER = "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA";
 
 let deepScanActive = false;
+const userMetadataCache = new Map(); // username.toLowerCase() -> { followersCount, followingCount, ... }
 
 function getCookie(name) {
   const match = document.cookie.match(new RegExp('(^|;\\s*)(' + name + ')=([^;]*)'));
   return match ? decodeURIComponent(match[3]) : null;
+}
+
+// Format numbers nicely (e.g. 15400 -> 15.4K, 1200000 -> 1.2M)
+function formatNumber(num) {
+  if (num === null || num === undefined) return "—";
+  if (num >= 1000000) return (num / 1000000).toFixed(1) + "M";
+  if (num >= 1000) return (num / 1000).toFixed(1) + "K";
+  return num.toString();
+}
+
+// Inject in-page network hook to intercept Twitter's GraphQL responses
+function injectNetworkInterceptor() {
+  const scriptContent = `
+    (function() {
+      if (window._xSmartCleanerInjected) return;
+      window._xSmartCleanerInjected = true;
+
+      function extractUsersFromObject(obj, results = []) {
+        if (!obj || typeof obj !== 'object') return results;
+        
+        // Match Twitter user legacy format
+        if (obj.screen_name && (obj.followers_count !== undefined || obj.friends_count !== undefined)) {
+          results.push({
+            screen_name: obj.screen_name,
+            name: obj.name,
+            followers_count: obj.followers_count || 0,
+            friends_count: obj.friends_count || 0,
+            followed_by: !!obj.followed_by,
+            following: !!obj.following,
+            verified: !!obj.verified || !!obj.is_blue_verified,
+            description: obj.description || ''
+          });
+        }
+
+        for (const key of Object.keys(obj)) {
+          try {
+            if (obj[key] && typeof obj[key] === 'object') {
+              extractUsersFromObject(obj[key], results);
+            }
+          } catch (e) {}
+        }
+        return results;
+      }
+
+      // Hook fetch
+      const originalFetch = window.fetch;
+      window.fetch = async function(...args) {
+        const response = await originalFetch.apply(this, args);
+        try {
+          const url = args[0] ? args[0].toString() : '';
+          if (url.includes('/graphql/') || url.includes('/users/') || url.includes('/Following')) {
+            const clone = response.clone();
+            clone.json().then(data => {
+              const users = extractUsersFromObject(data);
+              if (users.length > 0) {
+                window.postMessage({ type: 'X_SMART_CLEANER_USERS_DISCOVERED', users }, '*');
+              }
+            }).catch(() => {});
+          }
+        } catch (e) {}
+        return response;
+      };
+    })();
+  `;
+
+  const scriptEl = document.createElement("script");
+  scriptEl.textContent = scriptContent;
+  (document.head || document.documentElement).appendChild(scriptEl);
+  scriptEl.remove();
+}
+
+injectNetworkInterceptor();
+
+// Listen to messages from the in-page interceptor
+window.addEventListener("message", (event) => {
+  if (event.source !== window || !event.data) return;
+  if (event.data.type === "X_SMART_CLEANER_USERS_DISCOVERED" && Array.isArray(event.data.users)) {
+    for (const u of event.data.users) {
+      if (u.screen_name) {
+        userMetadataCache.set(u.screen_name.toLowerCase(), {
+          followersCount: u.followers_count,
+          followingCount: u.friends_count,
+          followedBy: u.followed_by,
+          following: u.following,
+          isVerified: u.verified,
+          bio: u.description
+        });
+      }
+    }
+  }
+});
+
+// Batch enrich usernames with accurate follower counts via Twitter internal API
+async function enrichUsersWithFollowersCount(usernames) {
+  const ct0 = getCookie("ct0");
+  if (!ct0 || usernames.length === 0) return;
+
+  // Filter those not in cache
+  const missing = usernames.filter(u => !userMetadataCache.has(u.toLowerCase()));
+  if (missing.length === 0) return;
+
+  // Batch in chunks of 100
+  for (let i = 0; i < missing.length; i += 100) {
+    const chunk = missing.slice(i, i + 100);
+    try {
+      const url = `https://x.com/i/api/1.1/users/lookup.json?screen_name=${encodeURIComponent(chunk.join(','))}&include_entities=false`;
+      const resp = await fetch(url, {
+        method: "GET",
+        headers: {
+          "authorization": `Bearer ${BEARER}`,
+          "x-csrf-token": ct0,
+          "x-twitter-active-user": "yes",
+          "x-twitter-auth-type": "OAuth2Session"
+        }
+      });
+
+      if (resp.ok) {
+        const data = await resp.json();
+        for (const u of data) {
+          if (u.screen_name) {
+            userMetadataCache.set(u.screen_name.toLowerCase(), {
+              followersCount: u.followers_count || 0,
+              followingCount: u.friends_count || 0,
+              followedBy: !!u.followed_by,
+              following: !!u.following,
+              isVerified: !!u.verified || !!u.is_blue_verified,
+              bio: u.description || ''
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[X Smart Cleaner] Batch lookup notice:", e);
+    }
+  }
 }
 
 // Get current logged-in user handle
@@ -49,6 +185,9 @@ async function unfollowUserViaAPI(username, userId = null) {
 
   if (!response.ok) {
     const errText = await response.text();
+    if (response.status === 429) {
+      throw new Error(`429 Rate limit: Twitter API rate limit reached. Cool down needed.`);
+    }
     throw new Error(`Twitter API error (${response.status}): ${errText.slice(0, 100)}`);
   }
   return await response.json();
@@ -114,7 +253,7 @@ async function unfollowUserViaDOM(username) {
   return { success: true, method: "DOM" };
 }
 
-// Extract rich user data from visible cells
+// Extract rich user data from visible cells & enrich from cache
 function extractVisibleCells() {
   const cells = Array.from(document.querySelectorAll('[data-testid="UserCell"]'));
   const list = [];
@@ -139,7 +278,7 @@ function extractVisibleCells() {
     // Verified badge check
     const isVerified = !!cell.querySelector('[data-testid="icon-verified"]');
     
-    // Bio description in cell
+    // Bio description
     const textNodes = cell.querySelectorAll('div[dir="auto"]');
     let bio = "";
     if (textNodes.length > 2) {
@@ -148,14 +287,20 @@ function extractVisibleCells() {
 
     const btn = cell.querySelector('button[aria-label*="Following"], button[aria-label*="دنبال می‌کنید"], [data-testid$="-unfollow"]');
     
+    // Retrieve cached metadata (followers count, etc.)
+    const meta = userMetadataCache.get(username.toLowerCase()) || {};
+    const followersCount = meta.followersCount !== undefined ? meta.followersCount : null;
+
     if (username && !username.includes("/")) {
       list.push({
         username,
         displayName,
         avatarUrl,
-        isVerified,
-        bio,
-        followsYou,
+        isVerified: isVerified || !!meta.isVerified,
+        bio: bio || meta.bio || "",
+        followersCount: followersCount,
+        formattedFollowers: formatNumber(followersCount),
+        followsYou: followsYou || !!meta.followedBy,
         canUnfollow: !!btn
       });
     }
@@ -163,7 +308,7 @@ function extractVisibleCells() {
   return list;
 }
 
-// Deep scroll scan
+// Deep scroll scan with batch metadata enrichment
 async function deepScrollScan(maxTarget = 300, onProgress) {
   deepScanActive = true;
   const userMap = new Map();
@@ -193,10 +338,29 @@ async function deepScrollScan(maxTarget = 300, onProgress) {
   }
 
   deepScanActive = false;
-  return Array.from(userMap.values());
+
+  const collectedUsers = Array.from(userMap.values());
+  
+  // Enrich collected users with followers counts via batch lookup
+  const usernamesToEnrich = collectedUsers.map(u => u.username);
+  await enrichUsersWithFollowersCount(usernamesToEnrich);
+
+  // Update final objects with enriched counts
+  for (const user of collectedUsers) {
+    const meta = userMetadataCache.get(user.username.toLowerCase());
+    if (meta && meta.followersCount !== undefined) {
+      user.followersCount = meta.followersCount;
+      user.formattedFollowers = formatNumber(meta.followersCount);
+      if (meta.isVerified) user.isVerified = true;
+      if (meta.followedBy) user.followsYou = true;
+      if (meta.bio && !user.bio) user.bio = meta.bio;
+    }
+  }
+
+  return collectedUsers;
 }
 
-// Runtime listeners
+// Runtime message listener
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "PING") {
     const user = getCurrentUser();
@@ -242,7 +406,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return true;
     } else {
       const items = extractVisibleCells();
-      sendResponse({ ok: true, count: items.length, items });
+      const usernames = items.map(u => u.username);
+      enrichUsersWithFollowersCount(usernames).then(() => {
+        for (const user of items) {
+          const meta = userMetadataCache.get(user.username.toLowerCase());
+          if (meta && meta.followersCount !== undefined) {
+            user.followersCount = meta.followersCount;
+            user.formattedFollowers = formatNumber(meta.followersCount);
+            if (meta.isVerified) user.isVerified = true;
+            if (meta.followedBy) user.followsYou = true;
+          }
+        }
+        sendResponse({ ok: true, count: items.length, items });
+      }).catch(() => {
+        sendResponse({ ok: true, count: items.length, items });
+      });
       return true;
     }
   }
