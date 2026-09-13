@@ -1,4 +1,4 @@
-// popup.js - X Smart Cleaner Pro Controller v2.1.0
+// popup.js - X Smart Cleaner Pro Controller v2.2.0
 
 const I18N = {
   fa: {
@@ -22,11 +22,14 @@ const I18N = {
     speed_stealth: "نامحسوس (۸-۱۵s)",
     speed_fast: "سریع (۲.۵-۴.۵s)",
     opt_all: "تمام موارد",
+    simulation_label: "حالت شبیه‌سازی (Dry Run / بدون آنفالوی واقعی)",
+    simulation_hint: "تست ۱۰۰٪ امن: تمام فیلترها و معیارها ارزیابی می‌شوند بدون اینکه اکانتی آنفالو شود.",
     deep_scan_label: "اسکرول عمیق و واکشی دقیق تعداد فالوورها (GraphQL)",
     processing: "در حال پردازش...",
     btn_scan: "۱. اسکن لیست",
     btn_backup: "پشتیبان CSV",
     btn_unfollow: "۲. شروع در پس‌زمینه",
+    btn_simulate: "۲. شروع شبیه‌سازی (تست ایمن)",
     btn_stop: "توقف",
     console_title: "📋 لاگ زنده فرآیند",
     clear: "پاک‌سازی",
@@ -52,7 +55,12 @@ const I18N = {
     footer_privacy: "۱۰۰٪ محلی در مرورگر — بدون ارسال کوکی یا پسورد به سرور",
     refollow_btn: "فالو مجدد",
     refollowed_btn: "✓ فالو شد",
-    bg_running: "عملیات در پس‌زمینه در حال اجراست (می‌توانید این پنجره را ببندید)"
+    bg_running: "عملیات در پس‌زمینه در حال اجراست (می‌توانید این پنجره را ببندید)",
+    cooldown_title: "سپر استراحت هوشمند فعال شد (۴۲۹)",
+    cooldown_desc: "توییتر لیمیت موقت صادر کرد. سیستم جهت امنیت اکانت وارد استراحت شد.",
+    timer_label: "زمان باقی‌مانده:",
+    btn_resume_now: "ادامه فوری",
+    btn_add_10m: "+۱۰ دقیقه"
   },
   en: {
     tagline: "Smart, secure & local X/Twitter cleaner",
@@ -75,11 +83,14 @@ const I18N = {
     speed_stealth: "Stealth (8-15s)",
     speed_fast: "Fast (2.5-4.5s)",
     opt_all: "All items",
+    simulation_label: "Simulation Mode (Dry Run / No actual unfollows)",
+    simulation_hint: "100% Safe test: Evaluates all candidates without unfollowing anyone on Twitter.",
     deep_scan_label: "Deep scroll & real follower fetching (GraphQL)",
     processing: "Processing...",
     btn_scan: "1. Scan Following",
     btn_backup: "Backup CSV",
     btn_unfollow: "2. Start in Background",
+    btn_simulate: "2. Start Simulation (Safe Test)",
     btn_stop: "Stop",
     console_title: "📋 Live Execution Log",
     clear: "Clear",
@@ -105,7 +116,12 @@ const I18N = {
     footer_privacy: "100% Client-Side — No passwords or cookies sent to any server",
     refollow_btn: "Re-Follow",
     refollowed_btn: "✓ Followed",
-    bg_running: "Task running in background (safe to close this popup)"
+    bg_running: "Task running in background (safe to close this popup)",
+    cooldown_title: "Smart Cooldown Shield Active (429)",
+    cooldown_desc: "Twitter issued a rate limit. System is resting to keep your account 100% safe.",
+    timer_label: "Time remaining:",
+    btn_resume_now: "Resume Now",
+    btn_add_10m: "+10 min"
   }
 };
 
@@ -115,6 +131,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let scannedCandidates = [];
   let selectedUsernames = new Set();
   let unfollowHistory = [];
+  let currentSimulationReport = [];
 
   // Elements
   const rootHtml = document.getElementById("root-html");
@@ -130,6 +147,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const batchSelect = document.getElementById("batch-select");
   const delaySelect = document.getElementById("delay-select");
+  const simulationToggle = document.getElementById("simulation-toggle");
   const deepScanToggle = document.getElementById("deep-scan-toggle");
   const thresholdSelect = document.getElementById("threshold-select");
   const protectVerifiedToggle = document.getElementById("protect-verified-toggle");
@@ -139,8 +157,17 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnScan = document.getElementById("btn-scan");
   const btnExport = document.getElementById("btn-export");
   const btnUnfollow = document.getElementById("btn-unfollow");
+  const unfollowBtnLabel = document.getElementById("unfollow-btn-label");
+  const btnExportSimulation = document.getElementById("btn-export-simulation");
   const btnStop = document.getElementById("btn-stop");
   const btnClearLog = document.getElementById("btn-clear-log");
+
+  // Item 3: Cooldown Banner Elements
+  const cooldownBanner = document.getElementById("cooldown-banner");
+  const cooldownCountdown = document.getElementById("cooldown-countdown");
+  const btnForceResume = document.getElementById("btn-force-resume");
+  const btnAddCooldown = document.getElementById("btn-add-cooldown");
+  const btnStopCooldown = document.getElementById("btn-stop-cooldown");
 
   const progressContainer = document.getElementById("progress-container");
   const progressText = document.getElementById("progress-text");
@@ -159,6 +186,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnClearHistory = document.getElementById("btn-clear-history");
   const badgeHistoryCount = document.getElementById("badge-history-count");
 
+  function formatTime(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    const pad = (n) => n < 10 ? '0' + n : n;
+    return `${mins}:${pad(secs)}`;
+  }
+
   // Apply Language & Direction
   function applyLanguage(lang) {
     currentLang = lang;
@@ -173,6 +207,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
+    updateUnfollowButtonState();
     updateCounterDisplay();
   }
 
@@ -212,11 +247,37 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  // Update Action Button based on Simulation mode
+  function updateUnfollowButtonState() {
+    const isSim = simulationToggle.checked;
+    if (isSim) {
+      btnUnfollow.classList.add("btn-simulation");
+      unfollowBtnLabel.innerText = I18N[currentLang].btn_simulate;
+    } else {
+      btnUnfollow.classList.remove("btn-simulation");
+      unfollowBtnLabel.innerText = I18N[currentLang].btn_unfollow;
+    }
+  }
+
+  simulationToggle.addEventListener("change", () => {
+    updateUnfollowButtonState();
+    if (chrome.storage && chrome.storage.local) {
+      chrome.storage.local.set({ isSimulationMode: simulationToggle.checked });
+    }
+    log(
+      simulationToggle.checked
+        ? (currentLang === "fa" ? "🧪 حالت شبیه‌سازی فعال شد؛ هیچ اکانتی آنفالو نخواهد شد." : "🧪 Simulation Mode active; no accounts will be unfollowed.")
+        : (currentLang === "fa" ? "حالت آنفالوی واقعی فعال شد." : "Real Unfollow Mode active."),
+      simulationToggle.checked ? "simulation" : "normal"
+    );
+  });
+
   // Load saved settings & sync with background task
   function initSettingsAndTaskState() {
     if (chrome.storage && chrome.storage.local) {
       chrome.storage.local.get([
-        "appLang", "customWhitelist", "bioKeywords", "threshold", "delayMode", "batchSize", "protectVerified", "unfollowHistory", "activeUnfollowTask"
+        "appLang", "customWhitelist", "bioKeywords", "threshold", "delayMode", 
+        "batchSize", "protectVerified", "unfollowHistory", "activeUnfollowTask", "isSimulationMode"
       ], (res) => {
         if (res.appLang) applyLanguage(res.appLang);
         if (res.customWhitelist) whitelistInput.value = res.customWhitelist;
@@ -225,18 +286,19 @@ document.addEventListener("DOMContentLoaded", () => {
         if (res.delayMode) delaySelect.value = res.delayMode;
         if (res.batchSize) batchSelect.value = res.batchSize;
         if (res.protectVerified !== undefined) protectVerifiedToggle.checked = res.protectVerified;
+        if (res.isSimulationMode !== undefined) {
+          simulationToggle.checked = res.isSimulationMode;
+          updateUnfollowButtonState();
+        }
         if (res.unfollowHistory) {
           unfollowHistory = res.unfollowHistory;
           renderHistory();
         }
-
-        // Check if background task is actively running
-        if (res.activeUnfollowTask && res.activeUnfollowTask.isRunning) {
+        if (res.activeUnfollowTask) {
           syncWithRunningTask(res.activeUnfollowTask);
         }
       });
 
-      // Auto-save listeners
       whitelistInput.addEventListener("input", () => chrome.storage.local.set({ customWhitelist: whitelistInput.value }));
       bioKeywordsInput.addEventListener("input", () => chrome.storage.local.set({ bioKeywords: bioKeywordsInput.value }));
       thresholdSelect.addEventListener("change", () => chrome.storage.local.set({ threshold: thresholdSelect.value }));
@@ -252,7 +314,17 @@ document.addEventListener("DOMContentLoaded", () => {
   function syncWithRunningTask(task) {
     if (!task) return;
 
-    if (task.isRunning) {
+    if (task.status === "in_cooldown") {
+      cooldownBanner.classList.remove("hidden");
+      cooldownCountdown.innerText = formatTime(task.cooldownRemaining || 0);
+      bgTaskBanner.classList.add("hidden");
+      btnScan.disabled = true;
+      btnExport.disabled = true;
+      btnUnfollow.classList.add("hidden");
+      btnStop.classList.remove("hidden");
+      btnStop.disabled = false;
+    } else if (task.isRunning) {
+      cooldownBanner.classList.add("hidden");
       bgTaskBanner.classList.remove("hidden");
       btnScan.disabled = true;
       btnExport.disabled = true;
@@ -263,12 +335,13 @@ document.addEventListener("DOMContentLoaded", () => {
       progressContainer.classList.remove("hidden");
       progressFill.style.width = `${task.currentPercent}%`;
       progressPercent.innerText = `${task.currentPercent}%`;
-      progressText.innerText = `[${task.currentIndex + 1}/${task.targetList.length}] @${task.currentUsername}`;
+      const modeTag = task.isSimulation ? "[🧪 Sim]" : "";
+      progressText.innerText = `${modeTag} [${task.currentIndex + 1}/${task.targetList.length}] @${task.currentUsername}`;
 
       // Sync recent logs
       if (task.logs && task.logs.length > 0) {
         consoleLogs.innerHTML = "";
-        task.logs.slice(-15).forEach(l => {
+        task.logs.slice(-20).forEach(l => {
           const line = document.createElement("div");
           line.className = `log-line ${l.type}`;
           line.innerText = `[${l.time}] ${l.text}`;
@@ -277,11 +350,17 @@ document.addEventListener("DOMContentLoaded", () => {
         consoleLogs.scrollTop = consoleLogs.scrollHeight;
       }
     } else {
+      cooldownBanner.classList.add("hidden");
       bgTaskBanner.classList.add("hidden");
       btnScan.disabled = false;
       btnExport.disabled = scannedCandidates.length === 0;
       btnUnfollow.classList.remove("hidden");
       btnStop.classList.add("hidden");
+
+      if (task.simulationReport && task.simulationReport.length > 0) {
+        currentSimulationReport = task.simulationReport;
+        btnExportSimulation.classList.remove("hidden");
+      }
     }
   }
 
@@ -289,22 +368,89 @@ document.addEventListener("DOMContentLoaded", () => {
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.action === "TASK_PROGRESS" && msg.state) {
       syncWithRunningTask(msg.state);
+    } else if (msg.action === "TASK_COOLDOWN_STARTED" && msg.state) {
+      syncWithRunningTask(msg.state);
+      log("🚨 Twitter Rate Limit (429) hit! Cooldown Shield active.", "warn");
+    } else if (msg.action === "TASK_COOLDOWN_TICK") {
+      cooldownCountdown.innerText = formatTime(msg.remaining);
+    } else if (msg.action === "TASK_COOLDOWN_ENDED" && msg.state) {
+      syncWithRunningTask(msg.state);
+      log("✓ Cooldown finished! Resuming execution...", "success");
     } else if (msg.action === "TASK_COMPLETED" && msg.state) {
       syncWithRunningTask(msg.state);
-      log(`🎉 Background task finished! ${msg.state.completed} unfollowed.`, "success");
-      chrome.storage.local.get("unfollowHistory", (res) => {
-        if (res.unfollowHistory) {
-          unfollowHistory = res.unfollowHistory;
-          renderHistory();
+      if (msg.state.isSimulation) {
+        log(`🎉 Simulation finished! ${msg.state.completed} accounts evaluated safely.`, "simulation");
+        if (msg.state.simulationReport && msg.state.simulationReport.length > 0) {
+          currentSimulationReport = msg.state.simulationReport;
+          btnExportSimulation.classList.remove("hidden");
         }
-      });
+      } else {
+        log(`🎉 Background task finished! ${msg.state.completed} unfollowed.`, "success");
+        chrome.storage.local.get("unfollowHistory", (res) => {
+          if (res.unfollowHistory) {
+            unfollowHistory = res.unfollowHistory;
+            renderHistory();
+          }
+        });
+      }
     } else if (msg.action === "TASK_STOPPED" && msg.state) {
       syncWithRunningTask(msg.state);
-      log("⏹ Background task stopped.", "warn");
-    } else if (msg.action === "TASK_RATE_LIMITED") {
-      syncWithRunningTask({ isRunning: false });
-      log("🚨 Twitter Rate Limit (429) hit! Cooldown triggered to protect account.", "error");
+      log("⏹ Task stopped by user.", "warn");
     }
+  });
+
+  // Cooldown Banner Controls
+  btnForceResume.addEventListener("click", () => {
+    log(currentLang === "fa" ? "درخواست ادامه فوری ارسال شد..." : "Sending force resume request...", "warn");
+    chrome.runtime.sendMessage({ action: "FORCE_RESUME_COOLDOWN" }, (res) => {
+      if (res && res.ok) {
+        cooldownBanner.classList.add("hidden");
+      }
+    });
+  });
+
+  btnAddCooldown.addEventListener("click", () => {
+    chrome.runtime.sendMessage({ action: "ADD_COOLDOWN_TIME" }, (res) => {
+      if (res && res.ok) {
+        cooldownCountdown.innerText = formatTime(res.remaining);
+        log(currentLang === "fa" ? "۱۰ دقیقه به زمان استراحت افزوده شد." : "+10 minutes added to cooldown timer.", "normal");
+      }
+    });
+  });
+
+  btnStopCooldown.addEventListener("click", () => {
+    chrome.runtime.sendMessage({ action: "STOP_BACKGROUND_UNFOLLOW" }, () => {
+      cooldownBanner.classList.add("hidden");
+      btnUnfollow.classList.remove("hidden");
+      btnStop.classList.add("hidden");
+      log(currentLang === "fa" ? "فرآیند لغو و متوقف شد." : "Task stopped completely.", "warn");
+    });
+  });
+
+  // Export Simulation CSV
+  btnExportSimulation.addEventListener("click", () => {
+    if (!currentSimulationReport || currentSimulationReport.length === 0) return;
+    
+    let csvContent = "\uFEFFUsername,Display Name,Followers Count,Is Verified,Reason,Simulated At\n";
+    currentSimulationReport.forEach(item => {
+      const u = `"${(item.username || '').replace(/"/g, '""')}"`;
+      const d = `"${(item.displayName || '').replace(/"/g, '""')}"`;
+      const f = item.followersCount || 0;
+      const v = item.isVerified ? "Yes" : "No";
+      const r = `"${(item.reason || '').replace(/"/g, '""')}"`;
+      const t = `"${(item.simulatedAt || '').replace(/"/g, '""')}"`;
+      csvContent += `${u},${d},${f},${v},${r},${t}\n`;
+    });
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.download = `x_simulation_report_${dateStr}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    log(currentLang === "fa" ? "گزارش شبیه‌سازی دانلود شد." : "Simulation CSV exported successfully.", "simulation");
   });
 
   // Connection check
@@ -359,271 +505,276 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    filtered.forEach(item => {
-      const card = document.createElement("div");
-      card.className = "user-item-card";
+    filtered.forEach(user => {
+      const row = document.createElement("div");
+      row.className = "candidate-row";
 
       const cb = document.createElement("input");
       cb.type = "checkbox";
-      cb.checked = selectedUsernames.has(item.username.toLowerCase());
+      cb.className = "candidate-cb";
+      cb.checked = selectedUsernames.has(user.username.toLowerCase());
       cb.addEventListener("change", () => {
-        if (cb.checked) selectedUsernames.add(item.username.toLowerCase());
-        else selectedUsernames.delete(item.username.toLowerCase());
+        if (cb.checked) {
+          selectedUsernames.add(user.username.toLowerCase());
+        } else {
+          selectedUsernames.delete(user.username.toLowerCase());
+        }
         updateCounterDisplay();
       });
 
-      // Avatar
-      let avatarEl;
-      if (item.avatarUrl) {
-        avatarEl = document.createElement("img");
-        avatarEl.src = item.avatarUrl;
-        avatarEl.className = "user-avatar";
-      } else {
-        avatarEl = document.createElement("div");
-        avatarEl.className = "user-avatar-placeholder";
-        avatarEl.innerText = (item.displayName || item.username)[0].toUpperCase();
-      }
-
-      // Details
       const info = document.createElement("div");
-      info.className = "user-info";
+      info.className = "candidate-info";
 
       const top = document.createElement("div");
-      top.className = "user-info-top";
+      top.className = "candidate-top";
 
       const name = document.createElement("span");
-      name.className = "user-display-name";
-      name.innerText = item.displayName || item.username;
-
-      top.appendChild(name);
-      if (item.isVerified) {
-        const v = document.createElement("span");
-        v.className = "verified-icon";
-        v.innerText = "✓";
-        top.appendChild(v);
-      }
-
-      // Followers count badge
-      if (item.formattedFollowers && item.formattedFollowers !== "—") {
-        const fb = document.createElement("span");
-        fb.className = "followers-badge";
-        fb.innerText = `👥 ${item.formattedFollowers}`;
-        top.appendChild(fb);
-      }
+      name.className = "candidate-name";
+      name.innerText = user.displayName || user.username;
 
       const handle = document.createElement("span");
-      handle.className = "user-screen-name";
-      handle.innerText = `@${item.username}`;
+      handle.className = "candidate-handle";
+      handle.innerText = `@${user.username}`;
+
+      top.appendChild(name);
+      if (user.isVerified) {
+        const badge = document.createElement("span");
+        badge.className = "verified-badge";
+        badge.innerHTML = "✓";
+        badge.title = "Verified";
+        top.appendChild(badge);
+      }
+      top.appendChild(handle);
+
+      if (user.formattedFollowers || user.followersCount !== undefined) {
+        const followers = document.createElement("span");
+        followers.className = "followers-badge";
+        followers.innerText = `${user.formattedFollowers || user.followersCount} ف`;
+        followers.title = `${user.followersCount || 0} Followers`;
+        top.appendChild(followers);
+      }
 
       info.appendChild(top);
-      info.appendChild(handle);
-      if (item.bio) {
-        const bio = document.createElement("span");
-        bio.className = "user-bio";
-        bio.innerText = item.bio;
+
+      if (user.bio) {
+        const bio = document.createElement("div");
+        bio.className = "candidate-bio";
+        bio.innerText = user.bio;
         info.appendChild(bio);
       }
 
-      card.appendChild(cb);
-      card.appendChild(avatarEl);
-      card.appendChild(info);
-      candidatesContainer.appendChild(card);
+      row.appendChild(cb);
+      row.appendChild(info);
+      candidatesContainer.appendChild(row);
     });
-
-    updateCounterDisplay();
   }
 
   function updateCounterDisplay() {
-    const total = scannedCandidates.length;
-    const selected = selectedUsernames.size;
-    selectedCounter.innerText = `${selected} / ${total} ${I18N[currentLang].selected_count}`;
-
-    if (total > 0) {
-      badgeListCount.innerText = total;
+    selectedCounter.innerText = `${selectedUsernames.size} ${I18N[currentLang].selected_count}`;
+    badgeListCount.innerText = selectedUsernames.size;
+    if (selectedUsernames.size > 0) {
       badgeListCount.classList.remove("hidden");
     } else {
       badgeListCount.classList.add("hidden");
     }
+    btnUnfollow.disabled = selectedUsernames.size === 0;
   }
 
-  candidateSearch.addEventListener("input", () => {
-    renderCandidates(candidateSearch.value);
-  });
-
   btnSelectAll.addEventListener("click", () => {
-    scannedCandidates.forEach(u => selectedUsernames.add(u.username.toLowerCase()));
+    scannedCandidates.forEach(c => selectedUsernames.add(c.username.toLowerCase()));
     renderCandidates(candidateSearch.value);
+    updateCounterDisplay();
   });
 
   btnDeselectAll.addEventListener("click", () => {
     selectedUsernames.clear();
     renderCandidates(candidateSearch.value);
+    updateCounterDisplay();
   });
 
-  // Render History
+  candidateSearch.addEventListener("input", (e) => {
+    renderCandidates(e.target.value);
+  });
+
+  // Render History Tab
   function renderHistory() {
     historyContainer.innerHTML = "";
+    badgeHistoryCount.innerText = unfollowHistory.length;
+    if (unfollowHistory.length > 0) {
+      badgeHistoryCount.classList.remove("hidden");
+    } else {
+      badgeHistoryCount.classList.add("hidden");
+    }
+
     if (unfollowHistory.length === 0) {
       const p = document.createElement("div");
       p.className = "empty-placeholder";
       p.innerText = I18N[currentLang].no_history;
       historyContainer.appendChild(p);
-      badgeHistoryCount.classList.add("hidden");
       return;
     }
 
-    badgeHistoryCount.innerText = unfollowHistory.length;
-    badgeHistoryCount.classList.remove("hidden");
-
     unfollowHistory.slice().reverse().forEach(item => {
       const row = document.createElement("div");
-      row.className = "history-item";
+      row.className = "history-row";
 
-      const left = document.createElement("div");
-      left.style.display = "flex";
-      left.style.flexDirection = "column";
+      const info = document.createElement("div");
+      info.className = "history-info";
 
-      const name = document.createElement("span");
-      name.style.fontWeight = "700";
-      name.innerText = `@${item.username}`;
+      const handle = document.createElement("span");
+      handle.className = "history-handle";
+      handle.innerText = `@${item.username}`;
 
-      const time = document.createElement("span");
-      time.className = "history-time";
-      time.innerText = item.date || "";
+      const date = document.createElement("span");
+      date.className = "history-date";
+      date.innerText = item.date;
 
-      left.appendChild(name);
-      left.appendChild(time);
+      info.appendChild(handle);
+      info.appendChild(date);
 
-      const btnUndo = document.createElement("button");
-      btnUndo.className = "undo-btn";
-      btnUndo.innerText = I18N[currentLang].refollow_btn;
-
-      btnUndo.addEventListener("click", () => {
-        if (!activeTabId) return;
-        btnUndo.disabled = true;
-        btnUndo.innerText = "...";
+      const refollowBtn = document.createElement("button");
+      refollowBtn.className = "refollow-btn";
+      refollowBtn.innerText = I18N[currentLang].refollow_btn;
+      refollowBtn.addEventListener("click", () => {
+        refollowBtn.disabled = true;
+        refollowBtn.innerText = "...";
         chrome.tabs.sendMessage(activeTabId, { action: "REFOLLOW_USER", username: item.username }, (res) => {
           if (res && res.ok) {
-            btnUndo.className = "undo-btn done";
-            btnUndo.innerText = I18N[currentLang].refollowed_btn;
-            log(`✓ Followed @${item.username} back!`, "success");
+            refollowBtn.innerText = I18N[currentLang].refollowed_btn;
+            refollowBtn.classList.add("success");
+            log(`Re-followed @${item.username}`, "success");
           } else {
-            btnUndo.disabled = false;
-            btnUndo.innerText = I18N[currentLang].refollow_btn;
-            log(`Failed to refollow: ${res ? res.error : 'Unknown'}`, "error");
+            refollowBtn.disabled = false;
+            refollowBtn.innerText = "Error";
+            log(`Failed to re-follow @${item.username}: ${res ? res.error : ''}`, "error");
           }
         });
       });
 
-      row.appendChild(left);
-      row.appendChild(btnUndo);
+      row.appendChild(info);
+      row.appendChild(refollowBtn);
       historyContainer.appendChild(row);
     });
   }
 
   btnClearHistory.addEventListener("click", () => {
     unfollowHistory = [];
-    if (chrome.storage && chrome.storage.local) {
-      chrome.storage.local.set({ unfollowHistory: [] });
-    }
-    renderHistory();
+    chrome.storage.local.set({ unfollowHistory: [] }, () => {
+      renderHistory();
+      log("تاریخچه آنفالو پاک‌سازی شد.", "text-muted");
+    });
   });
 
   // 1. Scan logic
   btnScan.addEventListener("click", async () => {
-    if (!activeTabId) return;
-
-    const isDeep = deepScanToggle.checked;
-    log(currentLang === "fa" ? `🔍 شروع اسکن ${isDeep ? 'عمیق و دریافت فالوورها (GraphQL)' : 'صفحه'}...` : `🔍 Starting scan...`, "normal");
-
     btnScan.disabled = true;
-    btnUnfollow.disabled = true;
     btnExport.disabled = true;
-    progressContainer.classList.remove("hidden");
-    progressFill.style.width = "20%";
-    progressPercent.innerText = "20%";
-    progressText.innerText = I18N[currentLang].processing;
+    btnUnfollow.disabled = true;
+    btnExportSimulation.classList.add("hidden");
 
-    const customWhitelist = whitelistInput.value.toLowerCase().split(",").map(s => s.trim().replace(/^@/, '')).filter(Boolean);
-    const bioKeywords = bioKeywordsInput.value.toLowerCase().split(",").map(s => s.trim()).filter(Boolean);
-    const protectVerified = protectVerifiedToggle.checked;
-    const threshold = parseInt(thresholdSelect.value, 10);
-    const maxBatch = parseInt(batchSelect.value, 10);
-    const targetScanCount = maxBatch > 500 ? 500 : Math.max(maxBatch * 2, 100);
+    log(currentLang === "fa" ? "در حال واکشی و اسکرول صفحه..." : "Scanning & scrolling following page...", "normal");
 
-    chrome.tabs.sendMessage(activeTabId, { action: "SCAN_DOM_PAGE", deepScan: isDeep, maxTarget: targetScanCount }, (res) => {
-      progressFill.style.width = "100%";
-      progressPercent.innerText = "100%";
+    const deepScan = deepScanToggle.checked;
+    const maxTarget = parseInt(batchSelect.value, 10);
+
+    chrome.tabs.sendMessage(activeTabId, { action: "SCAN_DOM_PAGE", deepScan, maxTarget }, (res) => {
       btnScan.disabled = false;
-
-      if (!res || !res.ok) {
-        log(currentLang === "fa" ? "اسکن ناموفق بود یا در تب Following نیستید." : "Scan failed or not on Following page.", "error");
+      if (chrome.runtime.lastError || !res || !res.ok) {
+        log(`Scan failed: ${chrome.runtime.lastError ? chrome.runtime.lastError.message : res.error}`, "error");
         return;
       }
 
-      const items = res.items || [];
-      statFollowing.innerText = items.length;
+      const rawItems = res.items || [];
+      const threshold = parseInt(thresholdSelect.value, 10);
+      const protectVerified = protectVerifiedToggle.checked;
+      const bioKeywords = (bioKeywordsInput.value || "").split(",").map(k => k.trim().toLowerCase()).filter(Boolean);
+      const whitelist = (whitelistInput.value || "").split(",").map(w => w.trim().toLowerCase().replace("@", "")).filter(Boolean);
 
-      let nonFollowers = [];
       let protectedCount = 0;
+      let nonFollowers = [];
 
-      for (const item of items) {
-        const u = item.username.toLowerCase();
-        const bio = (item.bio || "").toLowerCase();
-        const isCustomProtected = customWhitelist.includes(u);
-        const hasProtectedBio = bioKeywords.some(kw => bio.includes(kw));
-        const isVerifiedProtected = protectVerified && item.isVerified;
-        const isFameProtected = threshold > 0 && item.followersCount !== null && item.followersCount >= threshold;
+      rawItems.forEach(u => {
+        const username = u.username.toLowerCase();
+        const bio = (u.bio || "").toLowerCase();
 
-        if (item.followsYou || isCustomProtected || hasProtectedBio || isVerifiedProtected || isFameProtected) {
+        // 1. Whitelist protection
+        if (whitelist.includes(username)) {
           protectedCount++;
-        } else {
-          nonFollowers.push(item);
+          return;
         }
-      }
 
+        // 2. Mutual followers
+        if (u.followsYou) {
+          protectedCount++;
+          return;
+        }
+
+        // 3. Verified badge
+        if (protectVerified && u.isVerified) {
+          protectedCount++;
+          return;
+        }
+
+        // 4. Bio keywords
+        if (bioKeywords.length > 0 && bioKeywords.some(kw => bio.includes(kw))) {
+          protectedCount++;
+          return;
+        }
+
+        // 5. Followers count threshold
+        if (threshold > 0 && u.followersCount && u.followersCount >= threshold) {
+          protectedCount++;
+          return;
+        }
+
+        nonFollowers.push(u);
+      });
+
+      statFollowing.innerText = rawItems.length;
       statNonFollowers.innerText = nonFollowers.length;
       statProtected.innerText = protectedCount;
+
       scannedCandidates = nonFollowers;
-      
-      // Auto select all eligible
-      selectedUsernames.clear();
-      scannedCandidates.forEach(u => selectedUsernames.add(u.username.toLowerCase()));
+      selectedUsernames = new Set(nonFollowers.map(u => u.username.toLowerCase()));
 
       renderCandidates();
+      updateCounterDisplay();
 
-      log(currentLang === "fa" 
-        ? `✓ اسکن پایان یافت: ${items.length} اکانت (${nonFollowers.length} بدون‌بک، ${protectedCount} محافظت‌شده)` 
-        : `✓ Scan complete: ${items.length} scanned (${nonFollowers.length} non-followers, ${protectedCount} protected)`, "success");
+      btnExport.disabled = nonFollowers.length === 0;
+      btnUnfollow.disabled = nonFollowers.length === 0;
 
-      if (nonFollowers.length > 0) {
-        btnUnfollow.disabled = false;
-        btnExport.disabled = false;
-      }
+      log(currentLang === "fa"
+        ? `اسکن تمام شد: ${rawItems.length} اکانت بررسی شدند، ${nonFollowers.length} کاندیدای بدون بک یافت شد (${protectedCount} اکانت محافظت شدند).`
+        : `Scan complete: ${rawItems.length} checked, ${nonFollowers.length} non-followers found (${protectedCount} protected).`, "success");
     });
   });
 
-  // 2. Export Backup
+  // 2. Export CSV Backup
   btnExport.addEventListener("click", () => {
     if (scannedCandidates.length === 0) return;
-    const dateStr = new Date().toISOString().slice(0, 10);
-    let csv = "\uFEFFUsername,Display Name,Followers Count,Follows You,Verified,Bio,Scan Date\n";
-    scannedCandidates.forEach(item => {
-      const name = (item.displayName || "").replace(/"/g, '""');
-      const bio = (item.bio || "").replace(/"/g, '""');
-      csv += `"${item.username}","${name}",${item.followersCount || 0},"No","${item.isVerified ? 'Yes' : 'No'}","${bio}","${dateStr}"\n`;
+
+    let csvContent = "\uFEFFUsername,Display Name,Followers,Verified,Bio\n";
+    scannedCandidates.forEach(u => {
+      const uname = `"${u.username.replace(/"/g, '""')}"`;
+      const dname = `"${(u.displayName || u.username).replace(/"/g, '""')}"`;
+      const followers = u.followersCount || 0;
+      const verified = u.isVerified ? "Yes" : "No";
+      const bio = `"${(u.bio || "").replace(/"/g, '""')}"`;
+      csvContent += `${uname},${dname},${followers},${verified},${bio}\n`;
     });
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `x_non_followers_v2.1_${dateStr}.csv`;
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.download = `x_non_followers_v2.2_${dateStr}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     log(`CSV Backup exported (${scannedCandidates.length} accounts).`, "success");
   });
 
-  // 3. Unfollow logic via Background Service Worker
+  // 3. Execution logic via Background Service Worker (Real or Simulation)
   btnUnfollow.addEventListener("click", () => {
     const targetList = scannedCandidates.filter(item => selectedUsernames.has(item.username.toLowerCase()));
     if (targetList.length === 0) {
@@ -631,17 +782,24 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
+    const isSimulation = simulationToggle.checked;
     const maxBatch = parseInt(batchSelect.value, 10);
     const runBatch = targetList.slice(0, maxBatch);
 
     log(currentLang === "fa" 
-      ? `🚀 ارسال ${runBatch.length} اکانت به موتور پس‌زمینه...` 
-      : `🚀 Dispatching ${runBatch.length} accounts to background engine...`, "success");
+      ? (isSimulation 
+          ? `🧪 آغاز شبیه‌سازی برای ${runBatch.length} اکانت بدون اعمال تغییر در توییتر...` 
+          : `🚀 ارسال ${runBatch.length} اکانت به موتور پس‌زمینه...`)
+      : (isSimulation 
+          ? `🧪 Starting simulation for ${runBatch.length} accounts without modifying Twitter...` 
+          : `🚀 Dispatching ${runBatch.length} accounts to background engine...`), 
+      isSimulation ? "simulation" : "success");
 
     chrome.runtime.sendMessage({
       action: "START_BACKGROUND_UNFOLLOW",
       targetList: runBatch,
       delayMode: delaySelect.value,
+      isSimulation: isSimulation,
       tabId: activeTabId
     }, (res) => {
       if (res && res.ok) {
@@ -661,6 +819,7 @@ document.addEventListener("DOMContentLoaded", () => {
       btnStop.classList.add("hidden");
       btnUnfollow.classList.remove("hidden");
       bgTaskBanner.classList.add("hidden");
+      cooldownBanner.classList.add("hidden");
     });
   });
 });

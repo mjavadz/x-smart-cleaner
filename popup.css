@@ -743,3 +743,174 @@ body {
   font-weight: 700;
 }
 
+
+
+/* ==========================================================================
+   v2.2.0: Item 3 (Smart Cooldown Shield) & Item 4 (Simulation Mode)
+   ========================================================================== */
+
+/* Item 4: Simulation Mode (Dry Run) Row */
+.simulation-row {
+  background: rgba(139, 92, 246, 0.08);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 4px;
+  transition: all 0.2s ease;
+}
+
+.simulation-row:hover {
+  border-color: rgba(139, 92, 246, 0.45);
+  background: rgba(139, 92, 246, 0.12);
+}
+
+.simulation-text-box {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.simulation-text-box strong {
+  font-size: 11px;
+  color: #c084fc;
+}
+
+.simulation-text-box small {
+  font-size: 9px;
+  color: #94a3b8;
+  line-height: 1.35;
+}
+
+.btn-simulation {
+  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  box-shadow: 0 2px 10px rgba(139, 92, 246, 0.35) !important;
+}
+
+.btn-simulation:hover:not(:disabled) {
+  background: linear-gradient(135deg, #9333ea 0%, #4f46e5 100%) !important;
+  box-shadow: 0 4px 14px rgba(139, 92, 246, 0.5) !important;
+}
+
+/* Item 3: Smart Cooldown Banner */
+.cooldown-banner {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(245, 158, 11, 0.15) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: fadeIn 0.3s ease;
+}
+
+.cooldown-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.cooldown-badge-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cooldown-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.cooldown-badge-wrap strong {
+  display: block;
+  font-size: 11px;
+  color: #fbbf24;
+}
+
+.cooldown-badge-wrap p {
+  font-size: 9px;
+  color: #cbd5e1;
+  margin: 0;
+  line-height: 1.3;
+}
+
+.cooldown-timer-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.timer-label {
+  font-size: 8px;
+  color: #94a3b8;
+}
+
+.timer-val {
+  font-family: monospace;
+  font-size: 14px;
+  font-weight: 900;
+  color: #f59e0b;
+}
+
+.cooldown-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 6px;
+}
+
+.btn-cooldown {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.btn-cooldown-resume {
+  background: #f59e0b;
+  color: #000000;
+}
+
+.btn-cooldown-resume:hover {
+  background: #d97706;
+}
+
+.btn-cooldown-add {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.btn-cooldown-add:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.btn-cooldown-stop {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.btn-cooldown-stop:hover {
+  background: rgba(239, 68, 68, 0.35);
+}
+
+/* Log Lines styling for simulation & cooldown */
+.log-line.simulation {
+  color: #c084fc;
+}
+
+.log-line.warn {
+  color: #fbbf24;
+}

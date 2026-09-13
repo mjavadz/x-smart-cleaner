@@ -2,7 +2,7 @@
 <html lang="fa" dir="rtl" id="root-html">
 <head>
   <meta charset="UTF-8">
-  <title>X Smart Cleaner Pro v2.1.0</title>
+  <title>X Smart Cleaner Pro v2.2.0</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
@@ -19,7 +19,7 @@
         <div>
           <div class="title-with-badge">
             <h1 class="app-title">X Smart Cleaner <span class="pro-text">PRO</span></h1>
-            <span class="version-badge">v2.1.0</span>
+            <span class="version-badge">v2.2.0</span>
           </div>
           <p class="app-sub" data-i18n="tagline">پالایشگر هوشمند، ایمن و محلی توییتر</p>
         </div>
@@ -68,6 +68,28 @@
         </div>
       </div>
 
+      <!-- Item 3: Smart Cooldown Banner (429 Rate Limit Shield) -->
+      <div id="cooldown-banner" class="cooldown-banner hidden">
+        <div class="cooldown-top">
+          <div class="cooldown-badge-wrap">
+            <span class="cooldown-icon">🛡️</span>
+            <div>
+              <strong data-i18n="cooldown_title">سپر استراحت هوشمند فعال شد (۴۲۹)</strong>
+              <p data-i18n="cooldown_desc">توییتر لیمیت موقت صادر کرد. سیستم جهت امنیت اکانت وارد استراحت شد.</p>
+            </div>
+          </div>
+          <div class="cooldown-timer-box">
+            <span class="timer-label" data-i18n="timer_label">زمان باقی‌مانده:</span>
+            <span id="cooldown-countdown" class="timer-val">۱۵:۰۰</span>
+          </div>
+        </div>
+        <div class="cooldown-actions">
+          <button id="btn-force-resume" class="btn-cooldown btn-cooldown-resume" data-i18n="btn_resume_now">ادامه فوری</button>
+          <button id="btn-add-cooldown" class="btn-cooldown btn-cooldown-add" data-i18n="btn_add_10m">+۱۰ دقیقه</button>
+          <button id="btn-stop-cooldown" class="btn-cooldown btn-cooldown-stop" data-i18n="btn_stop">توقف</button>
+        </div>
+      </div>
+
       <!-- Bento Stats Grid -->
       <div class="stats-grid">
         <div class="stat-card">
@@ -108,6 +130,20 @@
         </div>
       </div>
 
+      <!-- Item 4: Simulation Mode (Dry Run) Toggle Row -->
+      <div class="setting-row toggle-row simulation-row">
+        <label for="simulation-toggle" class="checkbox-label">
+          <input type="checkbox" id="simulation-toggle">
+          <span class="simulation-text-box">
+            <strong class="text-purple-300 flex items-center gap-1">
+              <span>🧪</span>
+              <span data-i18n="simulation_label">حالت شبیه‌سازی (Dry Run / بدون آنفالوی واقعی)</span>
+            </strong>
+            <small class="text-muted block" data-i18n="simulation_hint">تست ۱۰۰٪ امن: تمام فیلترها و معیارها ارزیابی می‌شوند بدون اینکه اکانتی آنفالو شود.</small>
+          </span>
+        </label>
+      </div>
+
       <!-- Auto-scroll checkbox -->
       <div class="setting-row toggle-row">
         <label for="deep-scan-toggle" class="checkbox-label">
@@ -139,7 +175,10 @@
         </button>
         <button id="btn-unfollow" class="btn btn-danger" disabled>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="17" y1="8" x2="23" y2="14"/><line x1="23" y1="8" x2="17" y2="14"/></svg>
-          <span data-i18n="btn_unfollow">۲. شروع در پس‌زمینه</span>
+          <span id="unfollow-btn-label" data-i18n="btn_unfollow">۲. شروع در پس‌زمینه</span>
+        </button>
+        <button id="btn-export-simulation" class="btn btn-simulation hidden" title="دانلود گزارش شبیه‌سازی">
+          <span>📥 گزارش تست (CSV)</span>
         </button>
         <button id="btn-stop" class="btn btn-secondary hidden">
           <span data-i18n="btn_stop">توقف</span>
