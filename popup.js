@@ -1,4 +1,4 @@
-// popup.js - X Smart Cleaner Pro Controller v2.2.0
+// popup.js - X Smart Cleaner Pro Controller v2.3.0
 
 const I18N = {
   fa: {
@@ -16,7 +16,10 @@ const I18N = {
     stat_nonfollowers_hint: "واجد شرایط",
     stat_protected: "محافظت‌شده",
     stat_protected_hint: "متقابل / وایت‌لیست",
-    label_batch: "سقف پارت:",
+    daily_quota_title: "سقف مصرف ۲۴ ساعته:",
+    label_daily_limit: "سقف ۲۴ ساعته:",
+    opt_unlimited: "نامحدود",
+    label_batch: "سقف هر پارت:",
     label_speed: "سرعت و تاخیر:",
     speed_safe: "ایمن (۴-۸.۵s)",
     speed_stealth: "نامحسوس (۸-۱۵s)",
@@ -35,6 +38,7 @@ const I18N = {
     clear: "پاک‌سازی",
     ready_hint: "منتظر شروع اسکن... تب Following در x.com را باز کنید.",
     select_all: "انتخاب همه",
+    select_ghosts: "فقط بدون عکس‌ها (🥚)",
     deselect_all: "لغو همه",
     selected_count: "انتخاب‌شده",
     no_candidates: "ابتدا در تب داشبورد دکمه «اسکن لیست» را بزنید.",
@@ -51,6 +55,8 @@ const I18N = {
     rule_bio: "کلمات کلیدی محافظت بایو (با کاما جدا کنید):",
     rule_bio_hint: "اگر بایوی اکانت شامل این کلمات باشد، هرگز آنفالو نمی‌شود.",
     rule_whitelist: "لیست سفید دائمی (آیدی‌ها را با کاما جدا کنید):",
+    export_whitelist: "📥 دانلود لیست سفید",
+    import_whitelist: "📤 بارگذاری از فایل",
     auto_save: "ذخیره خودکار",
     footer_privacy: "۱۰۰٪ محلی در مرورگر — بدون ارسال کوکی یا پسورد به سرور",
     refollow_btn: "فالو مجدد",
@@ -77,6 +83,9 @@ const I18N = {
     stat_nonfollowers_hint: "Eligible",
     stat_protected: "Protected",
     stat_protected_hint: "Mutual / Whitelist",
+    daily_quota_title: "24-Hour Safety Limit:",
+    label_daily_limit: "Daily Limit:",
+    opt_unlimited: "Unlimited",
     label_batch: "Batch size:",
     label_speed: "Speed profile:",
     speed_safe: "Safe (4-8.5s)",
@@ -96,6 +105,7 @@ const I18N = {
     clear: "Clear",
     ready_hint: "Ready. Open x.com/*/following and click Scan.",
     select_all: "Select All",
+    select_ghosts: "Only Ghost / Egg (🥚)",
     deselect_all: "Deselect All",
     selected_count: "selected",
     no_candidates: "No candidates yet. Click 'Scan Following' in Dashboard.",
@@ -112,6 +122,8 @@ const I18N = {
     rule_bio: "Bio Protection Keywords (comma-separated):",
     rule_bio_hint: "Accounts with matching bio keywords will never be unfollowed.",
     rule_whitelist: "Permanent Custom Whitelist (handles):",
+    export_whitelist: "📥 Export Whitelist",
+    import_whitelist: "📤 Import Whitelist",
     auto_save: "Auto Saved",
     footer_privacy: "100% Client-Side — No passwords or cookies sent to any server",
     refollow_btn: "Re-Follow",
@@ -132,6 +144,8 @@ document.addEventListener("DOMContentLoaded", () => {
   let selectedUsernames = new Set();
   let unfollowHistory = [];
   let currentSimulationReport = [];
+  let currentDailyQuota = 100;
+  let currentTodayCount = 0;
 
   // Elements
   const rootHtml = document.getElementById("root-html");
@@ -145,6 +159,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const statNonFollowers = document.getElementById("stat-non-followers");
   const statProtected = document.getElementById("stat-protected");
 
+  const dailyQuotaDisplay = document.getElementById("daily-quota-display");
+  const quotaBarFill = document.getElementById("quota-bar-fill");
+  const dailyQuotaSelect = document.getElementById("daily-quota-select");
+
   const batchSelect = document.getElementById("batch-select");
   const delaySelect = document.getElementById("delay-select");
   const simulationToggle = document.getElementById("simulation-toggle");
@@ -154,6 +172,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const bioKeywordsInput = document.getElementById("bio-keywords-input");
   const whitelistInput = document.getElementById("whitelist-input");
 
+  const btnExportWhitelist = document.getElementById("btn-export-whitelist");
+  const btnImportWhitelist = document.getElementById("btn-import-whitelist");
+  const whitelistFileInput = document.getElementById("whitelist-file-input");
+
   const btnScan = document.getElementById("btn-scan");
   const btnExport = document.getElementById("btn-export");
   const btnUnfollow = document.getElementById("btn-unfollow");
@@ -162,7 +184,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnStop = document.getElementById("btn-stop");
   const btnClearLog = document.getElementById("btn-clear-log");
 
-  // Item 3: Cooldown Banner Elements
+  // Cooldown Banner Elements
   const cooldownBanner = document.getElementById("cooldown-banner");
   const cooldownCountdown = document.getElementById("cooldown-countdown");
   const btnForceResume = document.getElementById("btn-force-resume");
@@ -178,6 +200,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const candidatesContainer = document.getElementById("candidates-container");
   const candidateSearch = document.getElementById("candidate-search");
   const btnSelectAll = document.getElementById("btn-select-all");
+  const btnSelectGhosts = document.getElementById("btn-select-ghosts");
   const btnDeselectAll = document.getElementById("btn-deselect-all");
   const selectedCounter = document.getElementById("selected-counter");
   const badgeListCount = document.getElementById("badge-list-count");
@@ -191,6 +214,27 @@ document.addEventListener("DOMContentLoaded", () => {
     const secs = seconds % 60;
     const pad = (n) => n < 10 ? '0' + n : n;
     return `${mins}:${pad(secs)}`;
+  }
+
+  // Feature 2: Daily Quota UI rendering
+  function updateDailyQuotaDisplay(count, quota) {
+    currentTodayCount = count !== undefined ? count : currentTodayCount;
+    currentDailyQuota = quota !== undefined ? quota : currentDailyQuota;
+    
+    if (currentDailyQuota > 0) {
+      dailyQuotaDisplay.innerText = `${currentTodayCount} / ${currentDailyQuota}`;
+      const pct = Math.min(100, Math.round((currentTodayCount / currentDailyQuota) * 100));
+      quotaBarFill.style.width = `${pct}%`;
+      if (pct >= 100) {
+        quotaBarFill.classList.add("warning");
+      } else {
+        quotaBarFill.classList.remove("warning");
+      }
+    } else {
+      dailyQuotaDisplay.innerText = `${currentTodayCount} / ∞`;
+      quotaBarFill.style.width = "0%";
+      quotaBarFill.classList.remove("warning");
+    }
   }
 
   // Apply Language & Direction
@@ -209,6 +253,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     updateUnfollowButtonState();
     updateCounterDisplay();
+    updateDailyQuotaDisplay(currentTodayCount, currentDailyQuota);
   }
 
   btnLang.addEventListener("click", () => {
@@ -277,7 +322,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (chrome.storage && chrome.storage.local) {
       chrome.storage.local.get([
         "appLang", "customWhitelist", "bioKeywords", "threshold", "delayMode", 
-        "batchSize", "protectVerified", "unfollowHistory", "activeUnfollowTask", "isSimulationMode"
+        "batchSize", "dailyQuota", "todayUnfollowCount", "lastQuotaDate",
+        "protectVerified", "unfollowHistory", "activeUnfollowTask", "isSimulationMode"
       ], (res) => {
         if (res.appLang) applyLanguage(res.appLang);
         if (res.customWhitelist) whitelistInput.value = res.customWhitelist;
@@ -285,6 +331,16 @@ document.addEventListener("DOMContentLoaded", () => {
         if (res.threshold) thresholdSelect.value = res.threshold;
         if (res.delayMode) delaySelect.value = res.delayMode;
         if (res.batchSize) batchSelect.value = res.batchSize;
+        if (res.dailyQuota !== undefined) {
+          dailyQuotaSelect.value = res.dailyQuota;
+          currentDailyQuota = parseInt(res.dailyQuota, 10);
+        }
+        
+        // Quota date check
+        const todayStr = new Date().toISOString().slice(0, 10);
+        currentTodayCount = (res.lastQuotaDate === todayStr) ? (res.todayUnfollowCount || 0) : 0;
+        updateDailyQuotaDisplay(currentTodayCount, currentDailyQuota);
+
         if (res.protectVerified !== undefined) protectVerifiedToggle.checked = res.protectVerified;
         if (res.isSimulationMode !== undefined) {
           simulationToggle.checked = res.isSimulationMode;
@@ -304,6 +360,12 @@ document.addEventListener("DOMContentLoaded", () => {
       thresholdSelect.addEventListener("change", () => chrome.storage.local.set({ threshold: thresholdSelect.value }));
       delaySelect.addEventListener("change", () => chrome.storage.local.set({ delayMode: delaySelect.value }));
       batchSelect.addEventListener("change", () => chrome.storage.local.set({ batchSize: batchSelect.value }));
+      dailyQuotaSelect.addEventListener("change", () => {
+        const q = parseInt(dailyQuotaSelect.value, 10);
+        chrome.storage.local.set({ dailyQuota: q });
+        chrome.runtime.sendMessage({ action: "SET_DAILY_QUOTA", dailyQuota: q });
+        updateDailyQuotaDisplay(currentTodayCount, q);
+      });
       protectVerifiedToggle.addEventListener("change", () => chrome.storage.local.set({ protectVerified: protectVerifiedToggle.checked }));
     }
   }
@@ -313,6 +375,10 @@ document.addEventListener("DOMContentLoaded", () => {
   // Sync UI with background task state
   function syncWithRunningTask(task) {
     if (!task) return;
+
+    if (task.todayCount !== undefined) {
+      updateDailyQuotaDisplay(task.todayCount, task.dailyQuota);
+    }
 
     if (task.status === "in_cooldown") {
       cooldownBanner.classList.remove("hidden");
@@ -376,6 +442,10 @@ document.addEventListener("DOMContentLoaded", () => {
     } else if (msg.action === "TASK_COOLDOWN_ENDED" && msg.state) {
       syncWithRunningTask(msg.state);
       log("✓ Cooldown finished! Resuming execution...", "success");
+    } else if (msg.action === "TASK_QUOTA_REACHED" && msg.state) {
+      syncWithRunningTask(msg.state);
+      updateDailyQuotaDisplay(msg.todayCount, msg.dailyLimit);
+      log(`🛡️ سقف ایمنی ۲۴ ساعته (${msg.dailyLimit} اکانت) تکمیل شد. عملیات متوقف گردید.`, "warn");
     } else if (msg.action === "TASK_COMPLETED" && msg.state) {
       syncWithRunningTask(msg.state);
       if (msg.state.isSimulation) {
@@ -427,19 +497,89 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  // Feature 4: Whitelist Export & Import
+  btnExportWhitelist.addEventListener("click", () => {
+    const list = (whitelistInput.value || "").trim();
+    if (!list) {
+      log(currentLang === "fa" ? "لیست سفید خالی است." : "Whitelist is empty.", "warn");
+      return;
+    }
+    const blob = new Blob([list], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `x_whitelist_${new Date().toISOString().slice(0, 10)}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+    log(currentLang === "fa" ? "فایل لیست سفید دانلود شد." : "Whitelist file exported.", "success");
+  });
+
+  btnImportWhitelist.addEventListener("click", () => {
+    whitelistFileInput.click();
+  });
+
+  whitelistFileInput.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const text = evt.target.result;
+      const importedHandles = text.split(/[\r\n,]+/).map(h => h.trim().replace(/^@/, '').toLowerCase()).filter(Boolean);
+      let currentList = (whitelistInput.value || "").split(",").map(h => h.trim().replace(/^@/, '').toLowerCase()).filter(Boolean);
+      
+      const merged = Array.from(new Set([...currentList, ...importedHandles]));
+      whitelistInput.value = merged.join(", ");
+      chrome.storage.local.set({ customWhitelist: whitelistInput.value });
+      
+      log(currentLang === "fa" 
+        ? `تعداد ${importedHandles.length} اکانت از فایل به لیست سفید افزوده شد (مجموع: ${merged.length}).` 
+        : `Imported ${importedHandles.length} handles into whitelist (total: ${merged.length}).`, "success");
+    };
+    reader.readAsText(file);
+    whitelistFileInput.value = "";
+  });
+
+  // Feature 1: 1-Click Whitelist from List Action
+  function addHandleToWhitelist(username) {
+    const handle = username.toLowerCase().replace('@', '').trim();
+    let currentList = (whitelistInput.value || "").split(",").map(s => s.trim().toLowerCase().replace('@', '')).filter(Boolean);
+    if (!currentList.includes(handle)) {
+      currentList.push(handle);
+      whitelistInput.value = currentList.join(", ");
+      chrome.storage.local.set({ customWhitelist: whitelistInput.value });
+    }
+    
+    // Remove from candidates and selected set
+    scannedCandidates = scannedCandidates.filter(u => u.username.toLowerCase() !== handle);
+    selectedUsernames.delete(handle);
+    
+    // Increment protected count
+    let pCount = parseInt(statProtected.innerText, 10) || 0;
+    statProtected.innerText = pCount + 1;
+    statNonFollowers.innerText = scannedCandidates.length;
+    
+    renderCandidates(candidateSearch.value);
+    updateCounterDisplay();
+    
+    log(currentLang === "fa" 
+      ? `🛡️ @${username} به لیست سفید دائمی اضافه شد و محافظت گردید.` 
+      : `🛡️ @${username} added to permanent whitelist and protected.`, "success");
+  }
+
   // Export Simulation CSV
   btnExportSimulation.addEventListener("click", () => {
     if (!currentSimulationReport || currentSimulationReport.length === 0) return;
     
-    let csvContent = "\uFEFFUsername,Display Name,Followers Count,Is Verified,Reason,Simulated At\n";
+    let csvContent = "\uFEFFUsername,Display Name,Followers Count,Is Verified,Is Ghost,Reason,Simulated At\n";
     currentSimulationReport.forEach(item => {
       const u = `"${(item.username || '').replace(/"/g, '""')}"`;
       const d = `"${(item.displayName || '').replace(/"/g, '""')}"`;
       const f = item.followersCount || 0;
       const v = item.isVerified ? "Yes" : "No";
+      const g = item.isGhost ? "Yes" : "No";
       const r = `"${(item.reason || '').replace(/"/g, '""')}"`;
       const t = `"${(item.simulatedAt || '').replace(/"/g, '""')}"`;
-      csvContent += `${u},${d},${f},${v},${r},${t}\n`;
+      csvContent += `${u},${d},${f},${v},${g},${r},${t}\n`;
     });
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -554,6 +694,15 @@ document.addEventListener("DOMContentLoaded", () => {
         top.appendChild(followers);
       }
 
+      // Feature 3: Ghost Badge
+      if (user.isGhost || user.isDefaultAvatar) {
+        const ghostBadge = document.createElement("span");
+        ghostBadge.className = "ghost-badge";
+        ghostBadge.innerText = "🥚 بی‌عکس";
+        ghostBadge.title = "فاقد تصویر پروفایل / غیرفعال";
+        top.appendChild(ghostBadge);
+      }
+
       info.appendChild(top);
 
       if (user.bio) {
@@ -563,8 +712,19 @@ document.addEventListener("DOMContentLoaded", () => {
         info.appendChild(bio);
       }
 
+      // Feature 1: Quick Whitelist Button
+      const quickWhitelistBtn = document.createElement("button");
+      quickWhitelistBtn.className = "quick-whitelist-btn";
+      quickWhitelistBtn.innerHTML = "🛡️";
+      quickWhitelistBtn.title = currentLang === "fa" ? "افزودن دائمی به لیست سفید" : "Add to permanent whitelist";
+      quickWhitelistBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        addHandleToWhitelist(user.username);
+      });
+
       row.appendChild(cb);
       row.appendChild(info);
+      row.appendChild(quickWhitelistBtn);
       candidatesContainer.appendChild(row);
     });
   }
@@ -584,6 +744,21 @@ document.addEventListener("DOMContentLoaded", () => {
     scannedCandidates.forEach(c => selectedUsernames.add(c.username.toLowerCase()));
     renderCandidates(candidateSearch.value);
     updateCounterDisplay();
+  });
+
+  // Feature 3: Select Only Ghost / Egg Accounts
+  btnSelectGhosts.addEventListener("click", () => {
+    selectedUsernames.clear();
+    scannedCandidates.forEach(c => {
+      if (c.isGhost || c.isDefaultAvatar) {
+        selectedUsernames.add(c.username.toLowerCase());
+      }
+    });
+    renderCandidates(candidateSearch.value);
+    updateCounterDisplay();
+    log(currentLang === "fa" 
+      ? `تعداد ${selectedUsernames.size} اکانت فاقد عکس یا غیرفعال انتخاب شدند.` 
+      : `Selected ${selectedUsernames.size} ghost/egg accounts.`, "normal");
   });
 
   btnDeselectAll.addEventListener("click", () => {
@@ -743,9 +918,12 @@ document.addEventListener("DOMContentLoaded", () => {
       btnExport.disabled = nonFollowers.length === 0;
       btnUnfollow.disabled = nonFollowers.length === 0;
 
+      const ghostCount = nonFollowers.filter(u => u.isGhost || u.isDefaultAvatar).length;
+      const ghostMsg = ghostCount > 0 ? ` (${ghostCount} اکانت فاقد عکس/غیرفعال)` : "";
+
       log(currentLang === "fa"
-        ? `اسکن تمام شد: ${rawItems.length} اکانت بررسی شدند، ${nonFollowers.length} کاندیدای بدون بک یافت شد (${protectedCount} اکانت محافظت شدند).`
-        : `Scan complete: ${rawItems.length} checked, ${nonFollowers.length} non-followers found (${protectedCount} protected).`, "success");
+        ? `اسکن تمام شد: ${rawItems.length} اکانت بررسی شدند، ${nonFollowers.length} کاندیدای بدون بک یافت شد${ghostMsg}.`
+        : `Scan complete: ${rawItems.length} checked, ${nonFollowers.length} non-followers found${ghostMsg}.`, "success");
     });
   });
 
@@ -753,14 +931,15 @@ document.addEventListener("DOMContentLoaded", () => {
   btnExport.addEventListener("click", () => {
     if (scannedCandidates.length === 0) return;
 
-    let csvContent = "\uFEFFUsername,Display Name,Followers,Verified,Bio\n";
+    let csvContent = "\uFEFFUsername,Display Name,Followers,Verified,Is Ghost,Bio\n";
     scannedCandidates.forEach(u => {
       const uname = `"${u.username.replace(/"/g, '""')}"`;
       const dname = `"${(u.displayName || u.username).replace(/"/g, '""')}"`;
       const followers = u.followersCount || 0;
       const verified = u.isVerified ? "Yes" : "No";
+      const ghost = (u.isGhost || u.isDefaultAvatar) ? "Yes" : "No";
       const bio = `"${(u.bio || "").replace(/"/g, '""')}"`;
-      csvContent += `${uname},${dname},${followers},${verified},${bio}\n`;
+      csvContent += `${uname},${dname},${followers},${verified},${ghost},${bio}\n`;
     });
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -768,7 +947,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const a = document.createElement("a");
     a.href = url;
     const dateStr = new Date().toISOString().slice(0, 10);
-    a.download = `x_non_followers_v2.2_${dateStr}.csv`;
+    a.download = `x_non_followers_v2.3_${dateStr}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     log(`CSV Backup exported (${scannedCandidates.length} accounts).`, "success");
@@ -807,6 +986,8 @@ document.addEventListener("DOMContentLoaded", () => {
         log(currentLang === "fa" 
           ? "✓ موتور پس‌زمینه فعال شد؛ می‌توانید این پنجره را ببندید." 
           : "✓ Background engine active; you may close this popup safely.", "success");
+      } else if (res && !res.ok && res.error === "daily_quota_reached") {
+        log(`🛡️ سقف روزانه ۲۴ ساعته (${res.dailyQuota} اکانت) پر است. جهت امنیت اکانت تا فردا صبر کنید.`, "error");
       }
     });
   });

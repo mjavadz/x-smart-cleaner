@@ -30,11 +30,15 @@ function injectNetworkInterceptor() {
         
         // Match Twitter user legacy format
         if (obj.screen_name && (obj.followers_count !== undefined || obj.friends_count !== undefined)) {
+          const img = obj.profile_image_url_https || obj.profile_image_url || '';
+          const isDefaultImg = !!obj.default_profile_image || img.includes('default_profile_images');
           results.push({
             screen_name: obj.screen_name,
             name: obj.name,
             followers_count: obj.followers_count || 0,
             friends_count: obj.friends_count || 0,
+            statuses_count: obj.statuses_count || 0,
+            is_default_avatar: isDefaultImg,
             followed_by: !!obj.followed_by,
             following: !!obj.following,
             verified: !!obj.verified || !!obj.is_blue_verified,
@@ -90,6 +94,8 @@ window.addEventListener("message", (event) => {
         userMetadataCache.set(u.screen_name.toLowerCase(), {
           followersCount: u.followers_count,
           followingCount: u.friends_count,
+          statusesCount: u.statuses_count,
+          isDefaultAvatar: !!u.is_default_avatar,
           followedBy: u.followed_by,
           following: u.following,
           isVerified: u.verified,
@@ -128,9 +134,13 @@ async function enrichUsersWithFollowersCount(usernames) {
         const data = await resp.json();
         for (const u of data) {
           if (u.screen_name) {
+            const img = u.profile_image_url_https || u.profile_image_url || '';
+            const isDef = !!u.default_profile_image || img.includes('default_profile_images');
             userMetadataCache.set(u.screen_name.toLowerCase(), {
               followersCount: u.followers_count || 0,
               followingCount: u.friends_count || 0,
+              statusesCount: u.statuses_count || 0,
+              isDefaultAvatar: isDef,
               followedBy: !!u.followed_by,
               following: !!u.following,
               isVerified: !!u.verified || !!u.is_blue_verified,
@@ -290,6 +300,8 @@ function extractVisibleCells() {
     // Retrieve cached metadata (followers count, etc.)
     const meta = userMetadataCache.get(username.toLowerCase()) || {};
     const followersCount = meta.followersCount !== undefined ? meta.followersCount : null;
+    const isDefaultAvatar = (avatarUrl && avatarUrl.includes("default_profile_images")) || !!meta.isDefaultAvatar;
+    const isGhost = isDefaultAvatar || (meta.statusesCount === 0);
 
     if (username && !username.includes("/")) {
       list.push({
@@ -300,6 +312,8 @@ function extractVisibleCells() {
         bio: bio || meta.bio || "",
         followersCount: followersCount,
         formattedFollowers: formatNumber(followersCount),
+        isDefaultAvatar: isDefaultAvatar,
+        isGhost: isGhost,
         followsYou: followsYou || !!meta.followedBy,
         canUnfollow: !!btn
       });
@@ -348,12 +362,16 @@ async function deepScrollScan(maxTarget = 300, onProgress) {
   // Update final objects with enriched counts
   for (const user of collectedUsers) {
     const meta = userMetadataCache.get(user.username.toLowerCase());
-    if (meta && meta.followersCount !== undefined) {
-      user.followersCount = meta.followersCount;
-      user.formattedFollowers = formatNumber(meta.followersCount);
+    if (meta) {
+      if (meta.followersCount !== undefined) {
+        user.followersCount = meta.followersCount;
+        user.formattedFollowers = formatNumber(meta.followersCount);
+      }
       if (meta.isVerified) user.isVerified = true;
       if (meta.followedBy) user.followsYou = true;
       if (meta.bio && !user.bio) user.bio = meta.bio;
+      if (meta.isDefaultAvatar) user.isDefaultAvatar = true;
+      if (user.isDefaultAvatar || meta.statusesCount === 0) user.isGhost = true;
     }
   }
 

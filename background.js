@@ -1,4 +1,4 @@
-// background.js - X Smart Cleaner Pro Background Service Worker v2.2.0
+// background.js - X Smart Cleaner Pro Background Service Worker v2.3.0
 
 let currentTask = null;
 let isExecuting = false;
@@ -43,6 +43,26 @@ async function saveTaskState() {
     return;
   }
   await chrome.storage.local.set({ activeUnfollowTask: currentTask });
+}
+
+// Daily Quota Tracking (24-hour cycle)
+async function getDailyQuotaState() {
+  const data = await chrome.storage.local.get(["dailyQuota", "todayUnfollowCount", "lastQuotaDate"]);
+  const todayStr = new Date().toISOString().slice(0, 10);
+  let count = data.todayUnfollowCount || 0;
+  if (data.lastQuotaDate !== todayStr) {
+    count = 0;
+    await chrome.storage.local.set({ todayUnfollowCount: 0, lastQuotaDate: todayStr });
+  }
+  const quota = data.dailyQuota !== undefined ? parseInt(data.dailyQuota, 10) : 100;
+  return { count, quota, todayStr };
+}
+
+async function incrementDailyCount() {
+  const { count, quota, todayStr } = await getDailyQuotaState();
+  const newCount = count + 1;
+  await chrome.storage.local.set({ todayUnfollowCount: newCount, lastQuotaDate: todayStr });
+  return { count: newCount, quota };
 }
 
 // Handle Smart Cooldown (Item 3)
@@ -144,14 +164,14 @@ async function runUnfollowBatch() {
 
     // Item 4: Simulation Mode (Dry Run)
     if (isSimulation) {
-      // Do NOT send real unfollow request
       currentTask.completed++;
       const followersLabel = user.formattedFollowers || (user.followersCount ? user.followersCount.toLocaleString() : "۰");
+      const ghostNote = user.isGhost || user.isDefaultAvatar ? " | 🥚 بی‌عکس" : "";
       
       currentTask.logs.push({
         type: "simulation",
         time: new Date().toLocaleTimeString(),
-        text: `🧪 [شبیه‌سازی] @${user.username} کاندیدای حذف تشخیص داده شد (فالوور: ${followersLabel} | تیک آبی: ${user.isVerified ? 'دارد' : 'ندارد'})`
+        text: `🧪 [شبیه‌سازی] @${user.username} کاندیدای حذف تشخیص داده شد (فالوور: ${followersLabel} | تیک آبی: ${user.isVerified ? 'دارد' : 'ندارد'}${ghostNote})`
       });
 
       // Append to simulation report
@@ -161,11 +181,11 @@ async function runUnfollowBatch() {
         displayName: user.displayName || user.username,
         followersCount: user.followersCount || 0,
         isVerified: !!user.isVerified,
+        isGhost: !!(user.isGhost || user.isDefaultAvatar),
         reason: user.followsYou ? "متقابل" : "بدون فالوبک (Non-follower)",
         simulatedAt: new Date().toLocaleString()
       });
 
-      // Fast simulation pacing (600ms - 1000ms) so user can see the simulation unfold
       currentTask.currentIndex++;
       await saveTaskState();
       broadcast({ action: "TASK_PROGRESS", state: currentTask });
@@ -192,7 +212,7 @@ async function runUnfollowBatch() {
       result = { ok: false, error: err.message };
     }
 
-    // Item 3: Handle 429 Rate Limit Cooldown
+    // Handle 429 Rate Limit Cooldown
     if (result && result.error && (result.error.includes("429") || result.error.toLowerCase().includes("rate limit"))) {
       isExecuting = false;
       await startSmartCooldown(900); // 15 minutes default smart cooldown
@@ -219,6 +239,28 @@ async function runUnfollowBatch() {
         await chrome.storage.local.set({ unfollowHistory: history });
       } catch (e) {
         console.error("Failed to update history in storage", e);
+      }
+
+      // Feature 2: Daily Safety Quota Tracking
+      const { count: todayCount, quota: dailyLimit } = await incrementDailyCount();
+      currentTask.todayCount = todayCount;
+      currentTask.dailyQuota = dailyLimit;
+
+      if (dailyLimit > 0 && todayCount >= dailyLimit) {
+        currentTask.isRunning = false;
+        currentTask.status = "quota_reached";
+        currentTask.logs.push({
+          type: "warn",
+          time: new Date().toLocaleTimeString(),
+          text: `🛡️ [سقف روزانه] سقف ایمنی ۲۴ ساعته (${dailyLimit} اکانت) تکمیل شد. عملیات متوقف گردید.`
+        });
+        await saveTaskState();
+        showNotification(
+          "🛡️ سقف روزانه توییتر تکمیل شد",
+          `تعداد ${todayCount} اکانت در ۲۴ ساعت اخیر آنفالو شدند. جهت حفظ سلامت اکانت، فرآیند متوقف شد.`
+        );
+        broadcast({ action: "TASK_QUOTA_REACHED", state: currentTask, todayCount, dailyLimit });
+        break;
       }
     } else {
       currentTask.errors++;
@@ -280,39 +322,54 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const { targetList, delayMode, tabId, isSimulation } = request;
     shouldStop = false;
     
-    if (cooldownInterval) {
-      clearInterval(cooldownInterval);
-      cooldownInterval = null;
-    }
+    getDailyQuotaState().then(quotaState => {
+      // Check quota prior to real run
+      if (!isSimulation && quotaState.quota > 0 && quotaState.count >= quotaState.quota) {
+        sendResponse({ 
+          ok: false, 
+          error: "daily_quota_reached", 
+          todayCount: quotaState.count, 
+          dailyQuota: quotaState.quota 
+        });
+        return;
+      }
 
-    currentTask = {
-      isRunning: true,
-      status: "running",
-      tabId: tabId,
-      targetList: targetList,
-      delayMode: delayMode || "safe",
-      isSimulation: !!isSimulation,
-      currentIndex: 0,
-      completed: 0,
-      errors: 0,
-      currentUsername: targetList[0] ? targetList[0].username : "",
-      currentPercent: 0,
-      startedAt: Date.now(),
-      cooldownRemaining: 0,
-      cooldownTotal: 0,
-      simulationReport: [],
-      logs: [{
-        type: isSimulation ? "simulation" : "normal",
-        time: new Date().toLocaleTimeString(),
-        text: isSimulation 
-          ? `🧪 شبیه‌سازی بدون ریسک (Dry Run) برای ${targetList.length} اکانت آغاز شد...`
-          : `🚀 فرآیند پس‌زمینه برای ${targetList.length} اکانت آغاز شد...`
-      }]
-    };
+      if (cooldownInterval) {
+        clearInterval(cooldownInterval);
+        cooldownInterval = null;
+      }
 
-    saveTaskState().then(() => {
-      runUnfollowBatch();
-      sendResponse({ ok: true, state: currentTask });
+      currentTask = {
+        isRunning: true,
+        status: "running",
+        tabId: tabId,
+        targetList: targetList,
+        delayMode: delayMode || "safe",
+        isSimulation: !!isSimulation,
+        currentIndex: 0,
+        completed: 0,
+        errors: 0,
+        currentUsername: targetList[0] ? targetList[0].username : "",
+        currentPercent: 0,
+        startedAt: Date.now(),
+        cooldownRemaining: 0,
+        cooldownTotal: 0,
+        todayCount: quotaState.count,
+        dailyQuota: quotaState.quota,
+        simulationReport: [],
+        logs: [{
+          type: isSimulation ? "simulation" : "normal",
+          time: new Date().toLocaleTimeString(),
+          text: isSimulation 
+            ? `🧪 شبیه‌سازی بدون ریسک (Dry Run) برای ${targetList.length} اکانت آغاز شد...`
+            : `🚀 فرآیند پس‌زمینه برای ${targetList.length} اکانت آغاز شد...`
+        }]
+      };
+
+      saveTaskState().then(() => {
+        runUnfollowBatch();
+        sendResponse({ ok: true, state: currentTask });
+      });
     });
     return true;
   }
@@ -329,6 +386,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       saveTaskState();
     }
     sendResponse({ ok: true });
+    return true;
+  }
+
+  if (request.action === "GET_DAILY_QUOTA") {
+    getDailyQuotaState().then(q => sendResponse({ ok: true, quota: q.quota, count: q.count }));
+    return true;
+  }
+
+  if (request.action === "SET_DAILY_QUOTA") {
+    const q = parseInt(request.dailyQuota, 10);
+    chrome.storage.local.set({ dailyQuota: q }, () => {
+      sendResponse({ ok: true, quota: q });
+    });
     return true;
   }
 
@@ -360,7 +430,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   // Add 10 minutes to cooldown
   if (request.action === "ADD_COOLDOWN_TIME") {
     if (currentTask && currentTask.status === "in_cooldown") {
-      const additionalSec = 600; // 10 minutes
+      const additionalSec = 600;
       currentTask.cooldownRemaining += additionalSec;
       currentTask.cooldownTotal += additionalSec;
       currentTask.cooldownUntil += additionalSec * 1000;

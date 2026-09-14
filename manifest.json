@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "X Smart Cleaner Pro | پالایشگر هوشمند توییتر",
-  "version": "2.2.0",
-  "description": "پالایشگر نسل جدید توییتر: حالت شبیه‌سازی ایمن (Dry Run)، سپر هوشمند توقف و استراحت (Smart 429 Cooldown Shield)، اجرای نامحدود در پس‌زمینه (Service Worker) و واکشی دقیق فالوورها.",
+  "version": "2.3.0",
+  "description": "پالایشگر نسل جدید توییتر: سقف ایمن روزانه، وایت‌لیست ۱-کلیکه، تشخیص اکانت‌های مرده (Ghost/Egg)، حالت شبیه‌سازی (Dry Run) و اجرای نامحدود پس‌زمینه.",
   "permissions": [
     "storage",
     "activeTab",

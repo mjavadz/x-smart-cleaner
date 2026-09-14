@@ -2,7 +2,7 @@
 <html lang="fa" dir="rtl" id="root-html">
 <head>
   <meta charset="UTF-8">
-  <title>X Smart Cleaner Pro v2.2.0</title>
+  <title>X Smart Cleaner Pro v2.3.0</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
@@ -19,7 +19,7 @@
         <div>
           <div class="title-with-badge">
             <h1 class="app-title">X Smart Cleaner <span class="pro-text">PRO</span></h1>
-            <span class="version-badge">v2.2.0</span>
+            <span class="version-badge">v2.3.0</span>
           </div>
           <p class="app-sub" data-i18n="tagline">پالایشگر هوشمند، ایمن و محلی توییتر</p>
         </div>
@@ -109,15 +109,39 @@
         </div>
       </div>
 
+      <!-- Feature 2: Daily Quota Tracker Card -->
+      <div class="daily-quota-card">
+        <div class="quota-header">
+          <span class="quota-title">
+            <span>🛡️</span>
+            <span data-i18n="daily_quota_title">سقف مصرف ۲۴ ساعته:</span>
+          </span>
+          <span id="daily-quota-display" class="quota-stat">۰ / ۱۰۰</span>
+        </div>
+        <div class="quota-bar-bg">
+          <div id="quota-bar-fill" class="quota-bar-fill" style="width: 0%;"></div>
+        </div>
+      </div>
+
       <!-- Quick Control Row -->
       <div class="quick-controls">
         <div class="control-box">
-          <label for="batch-select" data-i18n="label_batch">سقف پارت:</label>
+          <label for="batch-select" data-i18n="label_batch">سقف هر پارت:</label>
           <select id="batch-select" class="select-input">
             <option value="50">۵۰ اکانت</option>
             <option value="100" selected>۱۰۰ اکانت (ایمن)</option>
             <option value="200">۲۰۰ اکانت</option>
             <option value="999999" data-i18n="opt_all">تمام موارد</option>
+          </select>
+        </div>
+        <div class="control-box">
+          <label for="daily-quota-select" data-i18n="label_daily_limit">سقف ۲۴ ساعته:</label>
+          <select id="daily-quota-select" class="select-input">
+            <option value="50">۵۰ اکانت</option>
+            <option value="100" selected>۱۰۰ اکانت (پیشنهادی)</option>
+            <option value="150">۱۵۰ اکانت</option>
+            <option value="200">۲۰۰ اکانت</option>
+            <option value="0" data-i18n="opt_unlimited">نامحدود</option>
           </select>
         </div>
         <div class="control-box">
@@ -203,6 +227,7 @@
         <input type="text" id="candidate-search" class="text-input" placeholder="جستجوی کاربر یا نام...">
         <div class="selection-actions">
           <button id="btn-select-all" class="mini-btn" data-i18n="select_all">انتخاب همه</button>
+          <button id="btn-select-ghosts" class="mini-btn text-warning" data-i18n="select_ghosts">فقط بدون عکس‌ها (🥚)</button>
           <button id="btn-deselect-all" class="mini-btn" data-i18n="deselect_all">لغو همه</button>
           <span id="selected-counter" class="counter-label">۰ انتخاب‌شده</span>
         </div>
@@ -259,7 +284,12 @@
             <label for="whitelist-input" data-i18n="rule_whitelist">لیست سفید دائمی (آیدی‌ها را با کاما جدا کنید):</label>
             <span class="hint-tag" data-i18n="auto_save">ذخیره خودکار</span>
           </div>
-          <input type="text" id="whitelist-input" class="text-input" placeholder="elonmusk, naval, vitalikbuterin...">
+          <textarea id="whitelist-input" class="text-input" rows="3" placeholder="elonmusk, naval, vitalikbuterin..."></textarea>
+          <div class="whitelist-actions-row">
+            <button id="btn-export-whitelist" class="mini-btn">📥 دانلود لیست سفید</button>
+            <button id="btn-import-whitelist" class="mini-btn">📤 بارگذاری از فایل</button>
+            <input type="file" id="whitelist-file-input" accept=".txt,.csv" style="display: none;">
+          </div>
         </div>
       </section>
     </div>
